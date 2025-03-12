@@ -1,0 +1,105 @@
+# Version control
+.git
+.gitignore
+.gitattributes
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual Environment
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# IDE specific files
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Test outputs and reports
+reports/
+test-results/
+allure-results/
+screenshots/
+*.log
+.coverage
+coverage.xml
+*.cover
+htmlcov/
+
+# Docker
+Dockerfile
+docker-compose.yml
+docker/
+.docker/
+
+# CI/CD
+.gitlab-ci.yml
+.travis.yml
+.circleci/
+ci/
+
+# Documentation
+docs/
+*.md
+!README.md
+
+# Local configuration files
+*.local
+local_config.yaml
+
+# Temporary files
+*.tmp
+*.temp
+.DS_Store
+Thumbs.db
+
+# Dependencies
+node_modules/
+
+# Secrets and credentials
+*.pem
+*.key
+*.crt
+credentials.json
+client_secrets.json
+*_credentials.*
+
+# Large binary files and datasets
+*.zip
+*.tar.gz
+*.rar
+*.7z
+*.mp4
+*.avi
+*.mov
+
+# Browser and driver specific
+drivers/
+*.exe
+chromedriver*
+geckodriver*
