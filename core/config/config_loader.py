@@ -6,6 +6,8 @@ import os
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
 from utils.helpers import get_config_path
 
+OVERRIDE_KEY = "--override"
+
 def load_config(config_path: str) -> dict:
     """
     Loads a configuration from a YAML file.
@@ -63,7 +65,7 @@ def load_config_from_cli(pytest_config=None) -> dict:
     # Determine if override should be used
     use_override = (
         (pytest_config and hasattr(pytest_config, 'getoption') and pytest_config.getoption("override")) or
-        "--override" in sys.argv
+        OVERRIDE_KEY in sys.argv
     )
     
     # Return merged config if override is enabled, otherwise return default
