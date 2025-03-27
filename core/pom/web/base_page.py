@@ -1,12 +1,14 @@
+from typing import Any, List, Optional, Tuple, Union
+
+from selenium.common.exceptions import (ElementNotVisibleException,
+                                        NoSuchElementException,
+                                        TimeoutException)
+from selenium.webdriver.common.action_chains import ActionChains
 from selenium.webdriver.common.by import By
-from selenium.webdriver.support import expected_conditions as EC
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.common.exceptions import TimeoutException, NoSuchElementException, ElementNotVisibleException
 from selenium.webdriver.remote.webdriver import WebDriver
 from selenium.webdriver.remote.webelement import WebElement
-from selenium.webdriver.common.action_chains import ActionChains
-from selenium.webdriver.support.ui import Select
-from typing import Tuple, Optional, Any, List, Union
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.support.ui import Select, WebDriverWait
 
 
 class BasePage:
@@ -68,7 +70,7 @@ class BasePage:
             WebElement: The visible element.
         """
         return self._wait(EC.visibility_of_element_located(locator), timeout)
-    
+
     def wait_for_element_clickable(self, locator: Tuple[str, str], timeout: int = 3) -> WebElement:
         """Wait for element to be clickable.
         
@@ -106,17 +108,18 @@ class BasePage:
         """
         return self._wait(EC.invisibility_of_element_located(locator), timeout)
 
-    def click(self, locator: Tuple[str, str]) -> None:
+    def click(self, locator: Tuple[str, str], timeout: int = None) -> None:
         """Click on an element.
         
         Args:
             locator (Tuple[str, str]): The element locator.
-            
+            timeout (int, optional): Time to wait in seconds. Defaults to 3.
         Raises:
             ElementNotVisibleException: If element is not clickable.
         """
+        timeout = timeout or self.DEFAULT_TIMEOUT
         try:
-            self.wait_for_element_visible(locator).click()
+            self.wait_for_element_visible(locator, timeout).click()
         except (TimeoutException, ElementNotVisibleException) as e:
             raise ElementNotVisibleException(f"Element {locator} not clickable: {str(e)}")
 
@@ -352,3 +355,58 @@ class BasePage:
             str: The current URL.
         """
         return self.driver.current_url
+
+    def get_input_value(self, locator: tuple) -> str:
+        """Get value from an input element.
+        
+        Args:
+            locator (Tuple[str, str]): The element locator.
+            
+        Returns:
+            str: The input's value.
+        """
+        return self.wait_for_element_visible(locator).get_attribute("value")
+
+    def wait_for_url_change(self, original_url: str, timeout: int = 10) -> bool:
+        """Wait for the URL to change from the original URL.
+        
+        Args:
+            original_url (str): The URL to change from.
+            timeout (int, optional): Time to wait in seconds. Defaults to 10.
+            
+        Returns:
+            bool: True if URL changed, False otherwise.
+        """
+        try:
+            return self._wait(
+                lambda driver: driver.current_url != original_url,
+                timeout
+            )
+        except TimeoutException:
+            return False
+
+    def wait_for_url_contains(self, url_substring: str, timeout: int = 10) -> bool:
+        """Wait for the URL to contain a specific substring.
+        
+        Args:
+            url_substring (str): The substring to wait for in the URL.
+            timeout (int, optional): Time to wait in seconds. Defaults to 10.
+            
+        Returns:
+            bool: True if substring found in URL, False otherwise.
+        """
+        try:
+            return self._wait(
+                EC.url_contains(url_substring),
+                timeout
+            )
+        except TimeoutException:
+            return False
+
+    def find_element(self, locator: Tuple[str, str]) -> WebElement:
+        """Find an element.
+        
+        Args:
+            locator (Tuple[str, str]): The element locator.
+        """
+        return self.driver.find_element(*locator)

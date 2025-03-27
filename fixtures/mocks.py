@@ -1,6 +1,8 @@
 import json
 from unittest.mock import patch
+
 import pytest
+
 
 class ResponseMock:
     """Mock HTTP responses for API calls"""

@@ -1,7 +1,6 @@
 from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-import time
+from selenium.webdriver.support.ui import WebDriverWait
 
 from core.pom.web.base_page import BasePage
 
@@ -15,8 +14,27 @@ class LoginPage(BasePage):
     # Texts
     TEXT_ERROR_MESSAGE = "Wir konnten zu Ihrer E-Mail-Adresse keine passende Anmeldung finden. Sie sind Geschäftskunde, dann geht es hier zum Energieportal."
     TEXT_INTRO = "Bitte melden Sie sich an."
+    TEXT_JETZT_REGISTRIEREN = "Jetzt registrieren"
+    TEXT_PASSWORT_VERGESSEN = "Kennwort vergessen?"
+    TEXT_ANGEMELDET_BLEIBEN = "Angemeldet bleiben"
+    TEXT_ANMELDEN = "Anmelden"
+    TEXT_EMAIL = "E-Mail-Adresse"
+    TEXT_KENNWORT = "Kennwort"
+    TEXT_GOOGLE_LOGIN = "Anmelden mit Google"
+    TEXT_APPLE_LOGIN = "Anmelden mit Apple"
+    TEXT_GOOGLE_KEY_PHRASES = [
+        "Sie können sich, wie in unseren Datenschutzhinweisen beschrieben",
+        "in ein Google-Konto einloggen",
+        "Daten ggf. in die USA und andere Drittstaaten übermittelt"
+    ]
+    TEXT_APPLE_KEY_PHRASES = [
+        "Sie können sich, wie in unseren Datenschutzhinweisen beschrieben",
+        "in ein Apple-Konto einloggen",
+        "Daten ggf. in die USA und andere Drittstaaten übermittelt"
+    ]
 
     # Locators
+    ERROR_MESSAGE = (By.CLASS_NAME, "error")
     LOGIN_FORM = (By.ID, "localAccountForm")
     ANMELDEN_BUTTON = (By.ID, "next")
     EMAIL_FIELD = (By.ID, "signInName")
@@ -26,10 +44,12 @@ class LoginPage(BasePage):
     ANGEMELDET_BLEIBEN = (By.ID, "rememberMe")
     GOOGLE_LOGIN = (By.ID, "dummyGoogleBtn")
     APPLE_LOGIN = (By.ID, "dummyAppleBtn")
+    GOOGLE_CONTINUE_BUTTON = (By.ID, "continueGoogleBtn")
+    APPLE_CONTINUE_BUTTON = (By.ID, "continueAppleBtn")
+    GOOGLE_LOGIN_TEXT = (By.CLASS_NAME, "social__legal-section__show")
+    APPLE_LOGIN_TEXT = (By.CLASS_NAME, "social__legal-section__show d-hide")
+    APPLE_LOGIN_TEXT_2 = (By.CLASS_NAME, "social__legal-section__show")
 
-    # Elements
-    ERROR_MESSAGE = (By.CLASS_NAME, "error")
-    INTRO_TEXT = (By.CLASS_NAME, "intro")
 
     def login(self, username: str, password: str):
         self.wait_for_element_visible(self.LOGIN_FORM)
