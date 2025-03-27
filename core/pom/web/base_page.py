@@ -1,4 +1,5 @@
 from typing import Any, List, Optional, Tuple, Union
+import time
 
 from selenium.common.exceptions import (ElementNotVisibleException,
                                         NoSuchElementException,
@@ -45,10 +46,22 @@ class BasePage:
         """
         if locator is None:
             locator = (By.TAG_NAME, self.TAG_NAME)
+        
+        # First wait for document ready state
+        try:
+            self._wait(
+                lambda driver: driver.execute_script("return document.readyState") == "complete",
+                timeout=self.PAGE_LOAD_TIMEOUT
+            )
+        except TimeoutException:
+            # Continue anyway, as sometimes readyState doesn't reach complete
+            pass
+            
+        # Then wait for specific element
         self._wait(EC.presence_of_element_located(locator), timeout=self.PAGE_LOAD_TIMEOUT)
     
     def wait_for_element(self, locator: Tuple[str, str], timeout: int = 3) -> WebElement:
-        """Wait for element to be present in the DOM.
+        """Wait for element to be present in the DOM with retry mechanism.
         
         Args:
             locator (Tuple[str, str]): The element locator.
@@ -57,7 +70,22 @@ class BasePage:
         Returns:
             WebElement: The found element.
         """
-        return self._wait(EC.presence_of_element_located(locator), timeout)
+        start_time = time.time()
+        last_exception = None
+        
+        # Add short retry mechanism to handle stale element issues
+        while time.time() - start_time < timeout:
+            try:
+                return self._wait(EC.presence_of_element_located(locator), timeout=1)
+            except Exception as e:
+                last_exception = e
+                time.sleep(0.5)
+        
+        if last_exception:
+            raise last_exception
+        
+        # If we made it here without an exception but also without returning, raise a timeout
+        raise TimeoutException(f"Timed out waiting for element {locator} to be present")
 
     def wait_for_element_visible(self, locator: Tuple[str, str], timeout: int = 3) -> WebElement:
         """Wait for element to be visible on the page.
@@ -109,7 +137,7 @@ class BasePage:
         return self._wait(EC.invisibility_of_element_located(locator), timeout)
 
     def click(self, locator: Tuple[str, str], timeout: int = None) -> None:
-        """Click on an element.
+        """Click on an element with retry mechanism for stale elements and interruptions.
         
         Args:
             locator (Tuple[str, str]): The element locator.
@@ -118,10 +146,28 @@ class BasePage:
             ElementNotVisibleException: If element is not clickable.
         """
         timeout = timeout or self.DEFAULT_TIMEOUT
-        try:
-            self.wait_for_element_visible(locator, timeout).click()
-        except (TimeoutException, ElementNotVisibleException) as e:
-            raise ElementNotVisibleException(f"Element {locator} not clickable: {str(e)}")
+        start_time = time.time()
+        last_exception = None
+        
+        while time.time() - start_time < timeout:
+            try:
+                element = self.wait_for_element_visible(locator, timeout=1)
+                
+                # Try regular click first
+                try:
+                    element.click()
+                    return
+                except Exception:
+                    # If regular click fails, try JavaScript click
+                    self.driver.execute_script("arguments[0].click();", element)
+                    return
+                    
+            except Exception as e:
+                last_exception = e
+                time.sleep(0.5)
+        
+        if last_exception:
+            raise ElementNotVisibleException(f"Element {locator} not clickable after multiple attempts: {str(last_exception)}")
 
     def get_title(self) -> str:
         """Get the page title text.
@@ -132,21 +178,52 @@ class BasePage:
         return self.driver.find_element(By.CSS_SELECTOR, self.TITLE).text
 
     def fill_text(self, locator: Tuple[str, str], text: str) -> None:
-        """Enter text in an input field.
+        """Enter text in an input field with retry mechanism.
         
         Args:
             locator (Tuple[str, str]): The input field locator.
             text (str): The text to enter.
             
         Raises:
-            NoSuchElementException: If the element is not found.
+            NoSuchElementException: If the element is not found after retries.
         """
-        try:
-            element = self.wait_for_element_visible(locator)
-            element.clear()
-            element.send_keys(text)
-        except (TimeoutException, NoSuchElementException) as e:
-            raise NoSuchElementException(f"Could not fill text in {locator}: {str(e)}")
+        start_time = time.time()
+        last_exception = None
+        timeout = self.DEFAULT_TIMEOUT
+        
+        while time.time() - start_time < timeout:
+            try:
+                element = self.wait_for_element_visible(locator, timeout=1)
+                
+                # Try different approaches to clear and fill text
+                try:
+                    # Standard approach
+                    element.clear()
+                    element.send_keys(text)
+                    
+                    # Verify that the text was entered correctly
+                    input_value = element.get_attribute("value")
+                    
+                    # If text was entered correctly, return
+                    if input_value == text:
+                        return
+                    
+                    # If not, try JS approach
+                    self.driver.execute_script(f"arguments[0].value = '{text}';", element)
+                    return
+                    
+                except Exception:
+                    # If standard approach fails, use JavaScript
+                    self.driver.execute_script(f"arguments[0].value = '';", element)
+                    self.driver.execute_script(f"arguments[0].value = '{text}';", element)
+                    return
+                    
+            except Exception as e:
+                last_exception = e
+                time.sleep(0.5)
+        
+        if last_exception:
+            raise NoSuchElementException(f"Could not fill text in {locator} after multiple attempts: {str(last_exception)}")
     
     def is_element_present(self, locator: Tuple[str, str], timeout: int = 1) -> bool:
         """Check if element is present without raising an exception.

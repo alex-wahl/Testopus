@@ -25,8 +25,8 @@ class TestGasag:
         url = f"{self.BASE_URL}/{LoginPage.LOGIN_PAGE_URL}"
         login_page = LoginPage(driver, url=url)
         login_page.login(TestGasag.USERNAME, TestGasag.PASSWORD)
-        login_page.wait_for_element(LoginPage.ERROR_MESSAGE)
-        assert login_page.get_text(LoginPage.ERROR_MESSAGE) == LoginPage.TEXT_ERROR_MESSAGE, f"Error message is not displayed"
+        login_page.wait_until_page_is_fully_loaded()
+        assert login_page.wait_for_text_present(LoginPage.ERROR_MESSAGE, LoginPage.TEXT_ERROR_MESSAGE)
 
     def test_email_field_is_accepting_email_addresses(self, driver):
         url = f"{self.BASE_URL}/{LoginPage.LOGIN_PAGE_URL}"
@@ -47,6 +47,7 @@ class TestGasag:
     def test_redirect_to_gasag_portal_after_login(self, driver):
         url = f"{self.BASE_URL}/{LoginPage.LOGIN_PAGE_URL}"
         login_page = LoginPage(driver, url=url)
+        login_page.wait_until_page_is_fully_loaded()
         assert login_page.wait_for_url_change(url), f"Redirect to {url} failed"
 
     def test_checkbox_is_checked(self, driver):
@@ -96,7 +97,6 @@ class TestGasag:
         login_page = LoginPage(driver, url=url)
         login_page.wait_for_element(LoginPage.GOOGLE_LOGIN)
         login_page.click(LoginPage.GOOGLE_LOGIN)
-        login_page.wait_until_page_is_fully_loaded()
         
         # Use the same improved selector approach
         google_text = login_page.execute_script("""
@@ -113,7 +113,6 @@ class TestGasag:
         login_page = LoginPage(driver, url=url)
         login_page.wait_for_element(LoginPage.APPLE_LOGIN)
         login_page.click(LoginPage.APPLE_LOGIN)
-        login_page.wait_until_page_is_fully_loaded()
         
         # Fix the selector to target Apple button more precisely
         apple_text = login_page.execute_script("""
@@ -130,23 +129,17 @@ class TestGasag:
         login_page = LoginPage(driver, url=url)
         login_page.wait_for_element(LoginPage.GOOGLE_LOGIN)
         login_page.click(LoginPage.GOOGLE_LOGIN)
-        login_page.wait_until_page_is_fully_loaded()
         login_page.wait_for_element(LoginPage.GOOGLE_CONTINUE_BUTTON)
         current_url = login_page.get_current_url()
         login_page.click(LoginPage.GOOGLE_CONTINUE_BUTTON)
-        login_page.wait_until_page_is_fully_loaded()
-        new_url = login_page.get_current_url()
-        assert current_url != new_url, f"Redirect to {new_url} failed"
+        assert login_page.wait_for_url_change(current_url), f"Redirect to {url} failed"
     
     def test_apple_login(self, driver):
         url = f"{self.BASE_URL}/{LoginPage.LOGIN_PAGE_URL}"
         login_page = LoginPage(driver, url=url)
         login_page.wait_for_element(LoginPage.APPLE_LOGIN)
         login_page.click(LoginPage.APPLE_LOGIN)
-        login_page.wait_until_page_is_fully_loaded()
         login_page.wait_for_element(LoginPage.APPLE_CONTINUE_BUTTON)
         current_url = login_page.get_current_url()
         login_page.click(LoginPage.APPLE_CONTINUE_BUTTON)
-        login_page.wait_until_page_is_fully_loaded()
-        new_url = login_page.get_current_url()
-        assert current_url != new_url, f"Redirect to {new_url} failed"
+        assert login_page.wait_for_url_change(current_url), f"Redirect to {url} failed"
