@@ -1,0 +1,13 @@
+services:
+  testopus:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: testopus
+    volumes:
+      - ..:/app
+    environment:
+      - PYTHONPATH=/app
+      - DOCKER_ENV=true
+    command: test:run
+    shm_size: 2gb  

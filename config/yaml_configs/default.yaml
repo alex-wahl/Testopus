@@ -1,3 +1,7 @@
 configuration:
-  default: 120
-  
+  gasag: 
+    web_url: https://www.gasag.de
+    username: waal.mos@gmail.com
+    password: Test1234!
+
+#https://www.gasag.de/onlineservice/login

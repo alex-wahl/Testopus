@@ -1,0 +1,71 @@
+name: Run Selenium Tests
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+    inputs:
+      test_suite:
+        description: 'Test suite to run'
+        required: false
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - ui
+          - api
+          - internal
+      debug_mode:
+        description: 'Enable debug output'
+        required: false
+        default: false
+        type: boolean
+      custom_flags:
+        description: 'Additional test flags'
+        required: false
+        type: string
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.12'
+          
+      - name: Install Hatch
+        run: pip install hatch
+      
+      - name: Build Docker image
+        run: docker-compose -f docker/docker-compose.yml build
+      
+      - name: Run tests
+        run: |
+          if [ "${{ github.event.inputs.test_suite }}" = "ui" ]; then
+            docker-compose -f docker/docker-compose.yml run --rm testopus ui:web ${{ github.event.inputs.custom_flags }}
+          elif [ "${{ github.event.inputs.test_suite }}" = "api" ]; then
+            docker-compose -f docker/docker-compose.yml run --rm testopus api:run ${{ github.event.inputs.custom_flags }}
+          elif [ "${{ github.event.inputs.test_suite }}" = "internal" ]; then
+            docker-compose -f docker/docker-compose.yml run --rm testopus test:internal ${{ github.event.inputs.custom_flags }}
+          else
+            docker-compose -f docker/docker-compose.yml up --remove-orphans --exit-code-from testopus
+          fi
+        env:
+          DEBUG_MODE: ${{ github.event.inputs.debug_mode == 'true' }}
+      
+      - name: Clean up containers
+        if: always()
+        run: docker-compose -f docker/docker-compose.yml down --remove-orphans
+      
+      # Optional: Upload test artifacts if you have any
+      # - name: Upload test results
+      #   if: always()
+      #   uses: actions/upload-artifact@v3
+      #   with:
+      #     name: test-results
+      #     path: test-results/ 
