@@ -137,12 +137,29 @@ class BasePage:
         """
         return self._wait(EC.invisibility_of_element_located(locator), timeout)
 
-    def click(self, locator: Tuple[str, str], timeout: int = None) -> None:
-        """Click on an element with retry mechanism for stale elements and interruptions.
+    def simple_click(self, element: WebElement) -> None:
+        """Perform a standard Selenium click on an element.
+        
+        Args:
+            element (WebElement): The element to click.
+        """
+        element.click()
+    
+    def js_click(self, element: WebElement) -> None:
+        """Click an element using JavaScript.
+        
+        Args:
+            element (WebElement): The element to click.
+        """
+        self.driver.execute_script("arguments[0].click();", element)
+    
+    def safe_click(self, locator: Tuple[str, str], timeout: int = None) -> None:
+        """Click on an element with retry mechanism and automatic strategy selection.
         
         Args:
             locator (Tuple[str, str]): The element locator.
-            timeout (int, optional): Time to wait in seconds. Defaults to 3.
+            timeout (int, optional): Time to wait in seconds.
+            
         Raises:
             ElementNotVisibleException: If element is not clickable.
         """
@@ -156,11 +173,11 @@ class BasePage:
                 
                 # Try regular click first
                 try:
-                    element.click()
+                    self.simple_click(element)
                     return
                 except Exception:
                     # If regular click fails, try JavaScript click
-                    self.driver.execute_script("arguments[0].click();", element)
+                    self.js_click(element)
                     return
                     
             except Exception as e:
@@ -169,54 +186,85 @@ class BasePage:
         
         if last_exception:
             raise ElementNotVisibleException(f"Element {locator} not clickable after multiple attempts: {str(last_exception)}")
-
-    def get_title(self) -> str:
-        """Get the page title text.
+    
+    def click(self, locator: Tuple[str, str], timeout: int = None) -> None:
+        """Click on an element with retry mechanism for stale elements and interruptions.
         
-        Returns:
-            str: The page title.
+        This is maintained for backward compatibility, now calls safe_click().
+        
+        Args:
+            locator (Tuple[str, str]): The element locator.
+            timeout (int, optional): Time to wait in seconds.
         """
-        return self.driver.find_element(By.CSS_SELECTOR, self.TITLE).text
+        self.safe_click(locator, timeout)
 
-    def fill_text(self, locator: Tuple[str, str], text: str) -> None:
-        """Enter text in an input field with retry mechanism.
+    def clear_field(self, element: WebElement) -> None:
+        """Clear the contents of an input field.
+        
+        Args:
+            element (WebElement): The input field to clear.
+        """
+        try:
+            element.clear()
+        except Exception:
+            # If standard clear fails, use JavaScript
+            self.driver.execute_script("arguments[0].value = '';", element)
+    
+    def simple_input(self, element: WebElement, text: str) -> None:
+        """Enter text in an input field using standard Selenium method.
+        
+        Args:
+            element (WebElement): The input field element.
+            text (str): The text to enter.
+        """
+        element.send_keys(text)
+    
+    def js_input(self, element: WebElement, text: str) -> None:
+        """Enter text in an input field using JavaScript.
+        
+        Args:
+            element (WebElement): The input field element.
+            text (str): The text to enter.
+        """
+        self.driver.execute_script(f"arguments[0].value = '{text}';", element)
+    
+    def safe_input(self, locator: Tuple[str, str], text: str, timeout: int = None) -> None:
+        """Enter text in an input field with retry mechanism and validation.
         
         Args:
             locator (Tuple[str, str]): The input field locator.
             text (str): The text to enter.
+            timeout (int, optional): Time to wait in seconds.
             
         Raises:
             NoSuchElementException: If the element is not found after retries.
         """
+        timeout = timeout or self.DEFAULT_TIMEOUT
         start_time = time.time()
         last_exception = None
-        timeout = self.DEFAULT_TIMEOUT
         
         while time.time() - start_time < timeout:
             try:
                 element = self.wait_for_element_visible(locator, timeout=1)
                 
-                # Try different approaches to clear and fill text
+                # Try standard approach first
                 try:
-                    # Standard approach
-                    element.clear()
-                    element.send_keys(text)
+                    self.clear_field(element)
+                    self.simple_input(element, text)
                     
-                    # Verify that the text was entered correctly
+                    # Verify the text was entered correctly
                     input_value = element.get_attribute("value")
-                    
-                    # If text was entered correctly, return
                     if input_value == text:
                         return
                     
-                    # If not, try JS approach
-                    self.driver.execute_script(f"arguments[0].value = '{text}';", element)
+                    # If verification fails, try JavaScript approach
+                    self.js_input(element, text)
                     return
                     
                 except Exception:
                     # If standard approach fails, use JavaScript
-                    self.driver.execute_script(f"arguments[0].value = '';", element)
-                    self.driver.execute_script(f"arguments[0].value = '{text}';", element)
+                    self.clear_field(element)
+                    self.js_input(element, text)
                     return
                     
             except Exception as e:
@@ -226,6 +274,25 @@ class BasePage:
         if last_exception:
             raise NoSuchElementException(f"Could not fill text in {locator} after multiple attempts: {str(last_exception)}")
     
+    def fill_text(self, locator: Tuple[str, str], text: str) -> None:
+        """Enter text in an input field with retry mechanism.
+        
+        This is maintained for backward compatibility, now calls safe_input().
+        
+        Args:
+            locator (Tuple[str, str]): The input field locator.
+            text (str): The text to enter.
+        """
+        self.safe_input(locator, text)
+
+    def get_title(self) -> str:
+        """Get the page title text.
+        
+        Returns:
+            str: The page title.
+        """
+        return self.driver.find_element(By.CSS_SELECTOR, self.TITLE).text
+
     def is_element_present(self, locator: Tuple[str, str], timeout: int = 1) -> bool:
         """Check if element is present without raising an exception.
         
