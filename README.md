@@ -1,5 +1,7 @@
 # Testopus
 
+WARNING, the prototype is in development, testing, and back in development. For now, it is a concept.
+
 A Python-based test automation framework combining Pytest, Selenium, Appium, Playwright, and AI/Google integrations under one roof. Streamline multi-platform testing with YAML-driven configs, POM architecture, and robust, extensible tooling.
 
 ## Running Tests
@@ -39,6 +41,7 @@ pytest -k test_login_with_invalid_credentials tests/ui_tests/web/gasag/test_gasa
 
 # Run with JUnit XML report
 pytest --junitxml=results.xml tests
+```
 
 ### Docker Setup
 
