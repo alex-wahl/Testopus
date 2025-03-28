@@ -26,11 +26,11 @@ WORKDIR /app
 # Copy only the files needed for dependency installation
 COPY pyproject.toml README.md ./
 
-# Pre-create all environments (use multiple cores with -j option)
-RUN hatch env create -j $(nproc) test && \
-    hatch env create -j $(nproc) ui && \
-    hatch env create -j $(nproc) api && \
-    hatch env create -j $(nproc) default
+# Pre-create all environments
+RUN hatch env create test && \
+    hatch env create ui && \
+    hatch env create api && \
+    hatch env create default
 
 # Copy the rest of the code
 COPY . .
