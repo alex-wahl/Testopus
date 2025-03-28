@@ -1,39 +1,39 @@
 FROM python:3.12-slim
 
-# Install dependencies
-RUN apt-get update && apt-get install -y \
+# Set environment variables to reduce Python output buffering and ensure pip doesn't use cache
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PYTHONPATH=/app \
+    DOCKER_ENV=true \
+    CHROME_BIN=/usr/bin/chromium \
+    CHROMEDRIVER_PATH=/usr/bin/chromedriver
+
+# Install system dependencies in a single layer to reduce image size
+RUN apt-get update && apt-get install -y --no-install-recommends \
     wget \
     unzip \
     curl \
     git \
     chromium \
     chromium-driver \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* \
+    && pip install --no-cache-dir hatch
 
 # Set up working directory
 WORKDIR /app
 
-# Copy project files for dependency installation
+# Copy only the files needed for dependency installation
 COPY pyproject.toml README.md ./
 
-# Install Hatch
-RUN pip install --no-cache-dir hatch
-
-# Pre-create all environments and install dependencies to avoid reinstalling each run
-RUN hatch env create test && \
-    hatch env create ui && \
-    hatch env create api && \
-    hatch env create default
+# Pre-create all environments (use multiple cores with -j option)
+RUN hatch env create -j $(nproc) test && \
+    hatch env create -j $(nproc) ui && \
+    hatch env create -j $(nproc) api && \
+    hatch env create -j $(nproc) default
 
 # Copy the rest of the code
 COPY . .
-
-# Set environment variables
-ENV PYTHONPATH=/app
-ENV DOCKER_ENV=true
-# Configure Chrome/Chromium path for Selenium
-ENV CHROME_BIN=/usr/bin/chromium
-ENV CHROMEDRIVER_PATH=/usr/bin/chromedriver
 
 # Default to running tests with Hatch
 ENTRYPOINT ["hatch", "run"]
