@@ -14,9 +14,9 @@ on:
         type: choice
         options:
           - all
-          - unit
-          - integration
-          - e2e
+          - ui
+          - api
+          - internal
       debug_mode:
         description: 'Enable debug output'
         required: false
@@ -33,15 +33,34 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.12'
+          
+      - name: Install Hatch
+        run: pip install hatch
+      
       - name: Build Docker image
         run: docker-compose -f docker/docker-compose.yml build
       
       - name: Run tests
-        run: docker-compose -f docker/docker-compose.yml up --exit-code-from testopus
+        run: |
+          if [ "${{ github.event.inputs.test_suite }}" = "ui" ]; then
+            docker-compose -f docker/docker-compose.yml run --rm testopus ui:web ${{ github.event.inputs.custom_flags }}
+          elif [ "${{ github.event.inputs.test_suite }}" = "api" ]; then
+            docker-compose -f docker/docker-compose.yml run --rm testopus api:run ${{ github.event.inputs.custom_flags }}
+          elif [ "${{ github.event.inputs.test_suite }}" = "internal" ]; then
+            docker-compose -f docker/docker-compose.yml run --rm testopus test:internal ${{ github.event.inputs.custom_flags }}
+          else
+            docker-compose -f docker/docker-compose.yml up --remove-orphans --exit-code-from testopus
+          fi
         env:
-          TEST_SUITE: ${{ github.event.inputs.test_suite || 'all' }}
           DEBUG_MODE: ${{ github.event.inputs.debug_mode == 'true' }}
-          CUSTOM_FLAGS: ${{ github.event.inputs.custom_flags }}
+      
+      - name: Clean up containers
+        if: always()
+        run: docker-compose -f docker/docker-compose.yml down --remove-orphans
       
       # Optional: Upload test artifacts if you have any
       # - name: Upload test results

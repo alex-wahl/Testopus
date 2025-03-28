@@ -13,16 +13,19 @@ RUN apt-get update && apt-get install -y \
 # Set up working directory
 WORKDIR /app
 
-# Copy just the pyproject.toml first
-COPY pyproject.toml .
+# Copy project files for dependency installation
+COPY pyproject.toml README.md ./
 
-# Create README.md if it doesn't exist to satisfy build dependency
-RUN if [ ! -f README.md ]; then echo "# Testopus" > README.md; fi
+# Install Hatch
+RUN pip install --no-cache-dir hatch
 
-# Install dependencies
-RUN pip install -e .
+# Pre-create all environments and install dependencies to avoid reinstalling each run
+RUN hatch env create test && \
+    hatch env create ui && \
+    hatch env create api && \
+    hatch env create default
 
-# Copy rest of the code
+# Copy the rest of the code
 COPY . .
 
 # Set environment variables
@@ -32,5 +35,6 @@ ENV DOCKER_ENV=true
 ENV CHROME_BIN=/usr/bin/chromium
 ENV CHROMEDRIVER_PATH=/usr/bin/chromedriver
 
-# Run tests command
-CMD ["pytest", "tests"]
+# Default to running tests with Hatch
+ENTRYPOINT ["hatch", "run"]
+CMD ["test:run"]

@@ -52,6 +52,11 @@ dependencies = [
   "ruff>=0.0.272",
 ]
 
+[tool.hatch.envs.default.scripts]
+format = "black src tests"
+lint = "ruff check src tests"
+typecheck = "mypy src"
+
 [tool.hatch.envs.test]
 dependencies = [
   "pytest>=8.3.4",
@@ -62,6 +67,42 @@ dependencies = [
 [tool.hatch.envs.test.scripts]
 run = "pytest {args:tests}"
 cov = "pytest --cov-report=term-missing --cov=src/testopus {args:tests}"
+internal = "pytest {args:tests/internal_tests}"
+
+[tool.hatch.envs.ui]
+dependencies = [
+  "pytest>=8.3.4",
+  "selenium==4.29.0",
+  "playwright==1.50.0",
+]
+
+[tool.hatch.envs.ui.scripts]
+web = "pytest {args:tests/ui_tests/web}"
+# Uncomment when mobile tests are added
+# mobile = "pytest {args:tests/ui_tests/mobile}"
+
+[tool.hatch.envs.api]
+dependencies = [
+  "pytest>=8.3.4",
+  "requests>=2.31.0",
+  "responses>=0.25.6",
+]
+
+[tool.hatch.envs.api.scripts]
+run = "pytest {args:tests/api_tests}"
+
+# Docs environment - commented out until needed
+# [tool.hatch.envs.docs]
+# dependencies = [
+#   "mkdocs>=1.5.3",
+#   "mkdocs-material>=9.5.3",
+#   "mkdocstrings>=0.24.0",
+#   "mkdocstrings-python>=1.7.5"
+# ]
+# 
+# [tool.hatch.envs.docs.scripts]
+# build = "mkdocs build"
+# serve = "mkdocs serve"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/testopus"]

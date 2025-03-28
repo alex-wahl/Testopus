@@ -6,7 +6,85 @@ A Python-based test automation framework combining Pytest, Selenium, Appium, Pla
 
 ## Running Tests
 
-### Local Setup
+### Local Setup with Hatch
+
+[Hatch](https://hatch.pypa.io/) is used for managing the project environments and dependencies.
+
+```bash
+# Install Hatch if not already installed
+pip install hatch
+
+# Run tests in the test environment
+hatch run test:run
+
+# Run tests with coverage
+hatch run test:cov
+
+# Run internal tests
+hatch run test:internal
+
+# Run tests with specific pytest arguments
+hatch run test:run -v -k "login or registration"
+
+# Enter a shell in the default environment
+hatch shell
+
+# Enter a shell in the test environment
+hatch shell test
+```
+
+### Running Specific Test Types with Hatch
+
+The project includes specialized environments for different test types:
+
+```bash
+# Run UI web tests
+hatch run ui:web
+```
+
+### Development Tools with Hatch
+
+Testopus includes Hatch scripts for development tasks:
+
+```bash
+# Format code with Black
+hatch run format
+
+# Run linting with Ruff
+hatch run lint
+
+# Run type checking with MyPy
+hatch run typecheck
+```
+
+### Hatch Environment Management
+
+Hatch environments are defined in `pyproject.toml`. The project includes these environments:
+
+- `default`: Development environment with code formatting tools
+- `test`: Testing environment with pytest and coverage tools
+- `ui`: Environment for UI testing with web browsers
+- `api`: Environment for API testing
+
+You can add custom scripts to these environments in the `pyproject.toml` file:
+
+```toml
+[tool.hatch.envs.custom]
+dependencies = [
+  "your-dependencies",
+]
+
+[tool.hatch.envs.custom.scripts]
+run-custom = "your-command {args}"
+```
+
+Then run your custom script with:
+
+```bash
+hatch run custom:run-custom
+```
+
+### Traditional Setup
 
 ```bash
 # Setup virtual environment
@@ -48,13 +126,21 @@ pytest --junitxml=results.xml tests
 ```bash
 # Build and run with Docker (run all tests)
 docker-compose -f docker/docker-compose.yml build
-docker-compose -f docker/docker-compose.yml up
+docker-compose -f docker/docker-compose.yml up --remove-orphans
+
+# Run with specific test types in Docker
+docker-compose -f docker/docker-compose.yml run --rm testopus ui:web
+docker-compose -f docker/docker-compose.yml run --rm testopus api:run
+docker-compose -f docker/docker-compose.yml run --rm testopus test:internal
 
 # Run with specific pytest arguments
-docker-compose -f docker/docker-compose.yml run testopus pytest -v -k "test_login_with_invalid_credentials" tests
+docker-compose -f docker/docker-compose.yml run --rm testopus test:run -v -k "test_login_with_invalid_credentials"
 
 # Run and specify environment variables
-docker-compose -f docker/docker-compose.yml run -e ENV=staging -e BROWSER=chrome testopus pytest tests
+docker-compose -f docker/docker-compose.yml run --rm -e ENV=staging -e BROWSER=chrome testopus test:run
+
+# Clean up orphaned containers (if warning persists)
+docker-compose -f docker/docker-compose.yml down --remove-orphans
 ```
 
 ## Features
@@ -65,3 +151,4 @@ docker-compose -f docker/docker-compose.yml run -e ENV=staging -e BROWSER=chrome
 - CI/CD with GitHub Actions
 - Parallel Test Execution
 - Cross-browser Testing with Selenium Grid
+- Hatch Environment Management
