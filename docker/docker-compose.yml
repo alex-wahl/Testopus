@@ -1,8 +1,7 @@
 services:
   testopus:
-    build:
-      context: ..
-      dockerfile: docker/Dockerfile
+    # Use the image we just built with docker/build-push-action
+    image: testopus:latest
     container_name: testopus
     volumes:
       - ..:/app

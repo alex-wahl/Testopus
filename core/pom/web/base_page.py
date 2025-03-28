@@ -1,5 +1,6 @@
-from typing import Any, List, Optional, Tuple, Union
+import functools
 import time
+from typing import Any, List, Optional, Tuple, Union
 
 from selenium.common.exceptions import (ElementNotVisibleException,
                                         NoSuchElementException,
@@ -487,3 +488,34 @@ class BasePage:
             locator (Tuple[str, str]): The element locator.
         """
         return self.driver.find_element(*locator)
+
+def retry(retries=3, delay=1, exceptions=(Exception,), on_retry=None):
+    """Retry decorator for functions that might fail temporarily.
+    
+    Args:
+        retries: Number of retry attempts. Default is 3.
+        delay: Delay between retries in seconds. Default is 1.
+        exceptions: Exceptions to catch and retry. Default is all exceptions.
+        on_retry: Optional callback function to execute between retries.
+            The callback receives (attempt, exception, *args, **kwargs).
+        
+    Returns:
+        The decorated function.
+    """
+    def decorator(func):
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            last_exception = None
+            for attempt in range(retries):
+                try:
+                    return func(*args, **kwargs)
+                except exceptions as e:
+                    last_exception = e
+                    if attempt < retries - 1:
+                        if on_retry is not None:
+                            on_retry(attempt, e, *args, **kwargs)
+                        time.sleep(delay)
+            if last_exception:
+                raise last_exception
+        return wrapper
+    return decorator

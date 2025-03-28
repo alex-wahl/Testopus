@@ -41,26 +41,61 @@ jobs:
       - name: Install Hatch
         run: pip install hatch
       
+      # Setup Docker Buildx for improved caching
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+      
+      # Prepare cache directories
+      - name: Prepare cache directories
+        run: |
+          mkdir -p /tmp/.buildx-cache
+          mkdir -p /tmp/.buildx-cache-new
+      
+      # Cache Docker layers
+      - name: Cache Docker layers
+        uses: actions/cache@v3
+        with:
+          path: /tmp/.buildx-cache
+          key: ${{ runner.os }}-buildx-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-buildx-
+      
+      # Build Docker image directly without registry login
       - name: Build Docker image
-        run: docker-compose -f docker/docker-compose.yml build
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          file: ./docker/Dockerfile
+          push: false
+          load: true
+          tags: testopus:latest
+          cache-from: type=local,src=/tmp/.buildx-cache
+          cache-to: type=local,dest=/tmp/.buildx-cache-new,mode=max
+      
+      # Temp fix for actions/cache performance
+      # https://github.com/docker/build-push-action/issues/252
+      - name: Move cache
+        run: |
+          rm -rf /tmp/.buildx-cache
+          mv /tmp/.buildx-cache-new /tmp/.buildx-cache
       
       - name: Run tests
         run: |
           if [ "${{ github.event.inputs.test_suite }}" = "ui" ]; then
-            docker-compose -f docker/docker-compose.yml run --rm testopus ui:web ${{ github.event.inputs.custom_flags }}
+            docker compose -f docker/docker-compose.yml run --rm testopus ui:web ${{ github.event.inputs.custom_flags }}
           elif [ "${{ github.event.inputs.test_suite }}" = "api" ]; then
-            docker-compose -f docker/docker-compose.yml run --rm testopus api:run ${{ github.event.inputs.custom_flags }}
+            docker compose -f docker/docker-compose.yml run --rm testopus api:run ${{ github.event.inputs.custom_flags }}
           elif [ "${{ github.event.inputs.test_suite }}" = "internal" ]; then
-            docker-compose -f docker/docker-compose.yml run --rm testopus test:internal ${{ github.event.inputs.custom_flags }}
+            docker compose -f docker/docker-compose.yml run --rm testopus test:internal ${{ github.event.inputs.custom_flags }}
           else
-            docker-compose -f docker/docker-compose.yml up --remove-orphans --exit-code-from testopus
+            docker compose -f docker/docker-compose.yml up --remove-orphans --exit-code-from testopus
           fi
         env:
           DEBUG_MODE: ${{ github.event.inputs.debug_mode == 'true' }}
       
       - name: Clean up containers
         if: always()
-        run: docker-compose -f docker/docker-compose.yml down --remove-orphans
+        run: docker compose -f docker/docker-compose.yml down --remove-orphans
       
       # Optional: Upload test artifacts if you have any
       # - name: Upload test results
