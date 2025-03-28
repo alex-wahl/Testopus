@@ -1,8 +1,60 @@
 # Testopus
 
-WARNING, the prototype is in development, testing, and back in development. For now, it is a concept.
-
 A Python-based test automation framework combining Pytest, Selenium, Appium, Playwright, and AI/Google integrations under one roof. Streamline multi-platform testing with YAML-driven configs, POM architecture, and robust, extensible tooling.
+
+**Status**: Prototype in development
+
+## Overview
+
+Testopus is a unified test automation ecosystem that integrates multiple testing tools and frameworks. It's designed to provide a consistent interface for testing web and mobile applications across different platforms.
+
+## Key Features
+
+- **Multi-Framework Support**
+  - Selenium for web UI testing
+  - Playwright for modern browser automation
+  - Appium for mobile testing (planned)
+  - Pytest integration for test organization and execution
+
+- **Project Architecture**
+  - Page Object Model (POM) design pattern
+  - YAML-driven configuration
+  - Environment-specific settings
+  - Robust and extensible UI interaction tooling
+
+- **DevOps Integration**
+  - Docker containerization
+  - CI/CD with GitHub Actions workflow
+  - Comprehensive test reporting
+
+- **Developer Experience**
+  - Hatch for environment management
+  - Type checking with MyPy
+  - Linting with Ruff
+  - Code formatting with Black
+
+## Project Structure
+
+```
+testopus/
+├── core/                      # Core framework components
+│   ├── ai/                    # AI integration components
+│   ├── config/                # Configuration management
+│   ├── pom/                   # Page Object Model implementation
+│   │   └── web/               # Web-specific page objects
+│   └── visual_testing/        # Visual testing components
+├── config/                    # Configuration files
+│   ├── env_settings/          # Environment-specific settings
+│   ├── pydantic_models/       # Pydantic models for config validation
+│   └── yaml_configs/          # YAML configuration files
+├── docker/                    # Docker configuration
+├── fixtures/                  # Pytest fixtures
+├── tests/                     # Test suites
+│   ├── api_tests/             # API test cases
+│   ├── internal_tests/        # Framework internal tests
+│   └── ui_tests/              # UI test cases
+├── utils/                     # Utility functions
+```
 
 ## Running Tests
 
@@ -24,7 +76,7 @@ hatch run test:cov
 hatch run test:internal
 
 # Run tests with specific pytest arguments
-hatch run test:run -v -k "login or registration"
+hatch run test:run -v -k "test_email_field_is_accepting_email_addresses or test_wordings"
 
 # Enter a shell in the default environment
 hatch shell
@@ -40,6 +92,9 @@ The project includes specialized environments for different test types:
 ```bash
 # Run UI web tests
 hatch run ui:web
+
+# Run API tests (not developed atm)
+hatch run api:run
 ```
 
 ### Development Tools with Hatch
@@ -102,9 +157,9 @@ pytest -v tests
 pytest tests/ui_tests/web/gasag/test_gasag.py
 
 # Run tests matching a keyword expression
-pytest -k "login or registration" tests
+pytest -k "test_email_field_is_accepting_email_addresses or test_wordings" tests
 
-# Run tests by marker
+# Run tests by marker (not implemented atm)
 pytest -m smoke tests
 ```
 
@@ -143,12 +198,76 @@ docker-compose -f docker/docker-compose.yml run --rm -e ENV=staging -e BROWSER=c
 docker-compose -f docker/docker-compose.yml down --remove-orphans
 ```
 
-## Features
+## Core Components
 
-- Selenium Web UI Testing
-- Pytest Integration
-- Docker Support
-- CI/CD with GitHub Actions
-- Parallel Test Execution
-- Cross-browser Testing with Selenium Grid
-- Hatch Environment Management
+### Base Page
+
+The `BasePage` class provides a comprehensive set of methods for interacting with web pages, including:
+
+- Element interaction (clicks, text input, form handling)
+- Waiting mechanisms (element presence, visibility, clickability)
+- Information retrieval (text, attributes, values)
+- State verification (existence, enabled/disabled status)
+- Page management (navigation, JavaScript execution, screenshots)
+
+### Configuration Management
+
+The framework uses a layered configuration approach:
+- Base configuration in YAML files
+- Environment overrides
+- CLI parameters for runtime configuration
+
+## Advanced Features
+
+### Retry Mechanism
+
+Tests can use the `@retry` decorator to automatically retry flaky tests:
+
+```python
+@retry(retries=3, delay=2, on_retry=log_retry)
+def test_login_with_invalid_credentials(self, login_page):
+    # Test implementation
+```
+
+### Soft Assertions
+
+Tests can use `pytest_check` for soft assertions that continue test execution after failures:
+
+```python
+check.is_in(expected_text, actual_text, "Text not found")
+```
+
+## CI/CD Integration
+
+Testopus includes GitHub Actions workflow configuration for continuous integration:
+
+- Automated testing on pushes and pull requests
+- Matrix testing for different test suites
+- Docker integration for consistent execution
+- Caching to optimize build times
+- Manual workflow triggering with custom parameters
+
+## Extensibility
+
+The framework is designed for extension:
+
+1. **New Page Objects**: Create new page classes extending `BasePage`
+2. **New Test Suites**: Add new directories under the appropriate test type
+3. **New Environments**: Define additional environments in `pyproject.toml`
+4. **New Integrations**: Add new directories under `core/` for new capabilities
+
+## Future Development
+
+- Mobile testing with Appium
+- AI-assisted test generation and debugging
+- Visual testing enhancements
+- Documentation generation with MkDocs
+
+## Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+## P.S. 
+
+The plan is to take neutral applications available in different countries, let's say the homepage of IKEA store or Wikipedia.
+Which will serve as a reference for creating their own test cases.
