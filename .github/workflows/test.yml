@@ -1,0 +1,52 @@
+name: Run Selenium Tests
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+    inputs:
+      test_suite:
+        description: 'Test suite to run'
+        required: false
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - unit
+          - integration
+          - e2e
+      debug_mode:
+        description: 'Enable debug output'
+        required: false
+        default: false
+        type: boolean
+      custom_flags:
+        description: 'Additional test flags'
+        required: false
+        type: string
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Build Docker image
+        run: docker-compose -f docker/docker-compose.yml build
+      
+      - name: Run tests
+        run: docker-compose -f docker/docker-compose.yml up --exit-code-from testopus
+        env:
+          TEST_SUITE: ${{ github.event.inputs.test_suite || 'all' }}
+          DEBUG_MODE: ${{ github.event.inputs.debug_mode == 'true' }}
+          CUSTOM_FLAGS: ${{ github.event.inputs.custom_flags }}
+      
+      # Optional: Upload test artifacts if you have any
+      # - name: Upload test results
+      #   if: always()
+      #   uses: actions/upload-artifact@v3
+      #   with:
+      #     name: test-results
+      #     path: test-results/ 

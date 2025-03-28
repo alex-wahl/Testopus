@@ -1,0 +1,12 @@
+services:
+  testopus:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    volumes:
+      - ..:/app
+    environment:
+      - PYTHONPATH=/app
+      - DOCKER_ENV=true
+    command: pytest tests -v
+    shm_size: 2gb  
