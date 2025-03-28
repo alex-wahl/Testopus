@@ -35,20 +35,10 @@ pytest -m smoke tests
 pytest -v -s tests
 
 # Run specific test by keyword
-pytest -k test_login_with_mocked_successful_response tests/ui_tests/web/gasag/test_gasag.py
+pytest -k test_login_with_invalid_credentials tests/ui_tests/web/gasag/test_gasag.py
 
 # Run with JUnit XML report
 pytest --junitxml=results.xml tests
-
-# Run in parallel (N processes)
-pytest -n 4 tests
-
-# Show test durations and slowest tests
-pytest --durations=10 tests
-
-# Stop after N failures
-pytest --maxfail=2 tests
-```
 
 ### Docker Setup
 
@@ -58,20 +48,10 @@ docker-compose -f docker/docker-compose.yml build
 docker-compose -f docker/docker-compose.yml up
 
 # Run with specific pytest arguments
-docker-compose -f docker/docker-compose.yml run testopus pytest -v -k "login" tests
+docker-compose -f docker/docker-compose.yml run testopus pytest -v -k "test_login_with_invalid_credentials" tests
 
 # Run and specify environment variables
 docker-compose -f docker/docker-compose.yml run -e ENV=staging -e BROWSER=chrome testopus pytest tests
-```
-
-### Running with Selenium Grid
-
-```bash
-# Start Selenium Grid and nodes
-docker-compose -f docker/docker-compose.yml up selenium-hub chrome firefox
-
-# Run tests against Selenium Grid
-pytest --selenium-host=selenium-hub --selenium-port=4444 tests/ui_tests
 ```
 
 ## Features
