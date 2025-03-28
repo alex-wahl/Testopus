@@ -41,26 +41,29 @@ jobs:
       - name: Install Hatch
         run: pip install hatch
       
+      - name: Set up Docker Compose
+        uses: docker/setup-buildx-action@v2
+      
       - name: Build Docker image
-        run: docker-compose -f docker/docker-compose.yml build
+        run: docker compose -f docker/docker-compose.yml build
       
       - name: Run tests
         run: |
           if [ "${{ github.event.inputs.test_suite }}" = "ui" ]; then
-            docker-compose -f docker/docker-compose.yml run --rm testopus ui:web ${{ github.event.inputs.custom_flags }}
+            docker compose -f docker/docker-compose.yml run --rm testopus ui:web ${{ github.event.inputs.custom_flags }}
           elif [ "${{ github.event.inputs.test_suite }}" = "api" ]; then
-            docker-compose -f docker/docker-compose.yml run --rm testopus api:run ${{ github.event.inputs.custom_flags }}
+            docker compose -f docker/docker-compose.yml run --rm testopus api:run ${{ github.event.inputs.custom_flags }}
           elif [ "${{ github.event.inputs.test_suite }}" = "internal" ]; then
-            docker-compose -f docker/docker-compose.yml run --rm testopus test:internal ${{ github.event.inputs.custom_flags }}
+            docker compose -f docker/docker-compose.yml run --rm testopus test:internal ${{ github.event.inputs.custom_flags }}
           else
-            docker-compose -f docker/docker-compose.yml up --remove-orphans --exit-code-from testopus
+            docker compose -f docker/docker-compose.yml up --remove-orphans --exit-code-from testopus
           fi
         env:
           DEBUG_MODE: ${{ github.event.inputs.debug_mode == 'true' }}
       
       - name: Clean up containers
         if: always()
-        run: docker-compose -f docker/docker-compose.yml down --remove-orphans
+        run: docker compose -f docker/docker-compose.yml down --remove-orphans
       
       # Optional: Upload test artifacts if you have any
       # - name: Upload test results
