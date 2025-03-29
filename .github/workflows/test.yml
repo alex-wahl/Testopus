@@ -160,6 +160,8 @@ jobs:
             mkdir -p reports/allure-report
             echo '<!DOCTYPE html><html><head><title>Test Report</title><style>body{font-family:Arial,sans-serif;padding:20px;line-height:1.6}.container{max-width:800px;margin:0 auto;padding:20px;border:1px solid #ddd;border-radius:5px}h1{color:#333}.warning{color:#f44336}.info{color:#2196F3}</style></head><body><div class="container"><h1>Test Report</h1><p class="warning">No test results available for this run.</p><p class="info">Possible reasons:</p><ul><li>No tests were found in the repository</li><li>Tests were found but not executed properly</li><li>Tests ran but results were not saved to the correct location</li></ul><p>Please check the workflow logs for more information.</p></div></body></html>' > reports/allure-report/index.html
           fi
+          # Create .nojekyll file to prevent GitHub Pages from using Jekyll
+          touch reports/allure-report/.nojekyll
       
       # Upload test reports as artifacts
       - name: Upload test reports
@@ -199,6 +201,9 @@ jobs:
           publish_dir: ./reports/allure-report
           publish_branch: reporting
           force_orphan: true
+          cname: ${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}
+          enable_jekyll: false
+          keep_files: false
       
       # Comment on PR with link to reports
       - name: Comment PR with Report Links
