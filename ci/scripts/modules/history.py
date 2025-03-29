@@ -34,24 +34,25 @@ def set_dry_run(dry_run: bool) -> None:
     DRY_RUN = dry_run
 
 
-def preserve_history(report_dir: str) -> None:
-    """Preserve test history between runs.
+def should_preserve_history() -> bool:
+    """Check if history preservation is enabled via environment variables.
 
-    Manages the history files across multiple directories to ensure test trends
-    and history data are preserved between test runs. This function:
-    1. Copies history data from the report to a storage directory
-    2. Ensures the results directory has the history data for the next run
-    3. Creates necessary directories if they don't exist
+    Returns:
+        bool: True if history preservation is enabled, False otherwise
+    """
+    preserve_history_env = os.environ.get("ALLURE_PRESERVE_HISTORY", "true").lower()
+    return preserve_history_env in ("true", "yes", "1")
+
+
+def get_history_directories(report_dir: str) -> dict:
+    """Get relevant history directories based on report directory.
 
     Args:
-        report_dir: Path to the Allure report directory.
-    """
-    # Check if history preservation is enabled
-    preserve_history_env = os.environ.get("ALLURE_PRESERVE_HISTORY", "true").lower()
-    if preserve_history_env not in ("true", "yes", "1"):
-        logger.info("History preservation disabled via environment variable")
-        return
+        report_dir: Path to the Allure report directory
 
+    Returns:
+        dict: Dictionary containing paths to relevant directories
+    """
     # Define key directories based on report_dir
     history_dir = os.path.join(report_dir, "history")
     report_parent = os.path.dirname(report_dir)
@@ -66,6 +67,66 @@ def preserve_history(report_dir: str) -> None:
         results_dir = os.path.join(report_parent, "allure-results")
         history_storage = os.path.join(report_parent, "allure-history")
 
+    return {"history_dir": history_dir, "results_dir": results_dir, "history_storage": history_storage}
+
+
+def copy_files_between_directories(src_dir: str, dst_dir: str, log_prefix: str = "") -> bool:
+    """Copy all files from source directory to destination directory.
+
+    Args:
+        src_dir: Source directory
+        dst_dir: Destination directory
+        log_prefix: Prefix for log messages
+
+    Returns:
+        bool: True if successful, False otherwise
+    """
+    if not os.path.exists(src_dir) or not any(os.listdir(src_dir)):
+        logger.warning(f"{log_prefix}No files found in {src_dir}")
+        return False
+
+    logger.info(f"{log_prefix}Copying files from {src_dir} to {dst_dir}")
+
+    try:
+        # Copy each file individually to avoid directory structure issues
+        for file_name in os.listdir(src_dir):
+            src_file = os.path.join(src_dir, file_name)
+            dst_file = os.path.join(dst_dir, file_name)
+
+            if os.path.isfile(src_file):
+                shutil.copy2(src_file, dst_file)
+                logger.info(f"{log_prefix}Copied {file_name}")
+
+        logger.info(f"{log_prefix}Successfully copied files")
+        return True
+    except Exception as e:
+        logger.error(f"{log_prefix}Error copying files: {str(e)}")
+        return False
+
+
+def preserve_history(report_dir: str) -> None:
+    """Preserve test history between runs.
+
+    Manages the history files across multiple directories to ensure test trends
+    and history data are preserved between test runs. This function:
+    1. Copies history data from the report to a storage directory
+    2. Ensures the results directory has the history data for the next run
+    3. Creates necessary directories if they don't exist
+
+    Args:
+        report_dir: Path to the Allure report directory.
+    """
+    # Check if history preservation is enabled
+    if not should_preserve_history():
+        logger.info("History preservation disabled via environment variable")
+        return
+
+    # Get relevant directories
+    dirs = get_history_directories(report_dir)
+    history_dir = dirs["history_dir"]
+    results_dir = dirs["results_dir"]
+    history_storage = dirs["history_storage"]
+
     logger.info(f"Using results directory: {results_dir}")
     logger.info(f"Using history storage directory: {history_storage}")
 
@@ -77,41 +138,12 @@ def preserve_history(report_dir: str) -> None:
     ensure_dir_exists(history_storage)
     ensure_dir_exists(history_dir)
 
-    # Ensure history is properly copied to storage
-    if os.path.exists(history_dir) and any(os.listdir(history_dir)):
-        logger.info(f"Copying history from {history_dir} to {history_storage}")
-        try:
-            # Copy each file individually to avoid directory structure issues
-            for history_file in os.listdir(history_dir):
-                src_file = os.path.join(history_dir, history_file)
-                dst_file = os.path.join(history_storage, history_file)
+    # Copy history from report to storage
+    copy_files_between_directories(history_dir, history_storage, "Report to storage: ")
 
-                if os.path.isfile(src_file):
-                    shutil.copy2(src_file, dst_file)
-                    logger.info(f"Copied {history_file} to history storage")
-
-            logger.info(f"Successfully preserved test history to {history_storage}")
-        except Exception as e:
-            logger.error(f"Failed to preserve history: {str(e)}")
-    else:
-        logger.warning(f"No history data found in {history_dir}")
-
-    # Also ensure results directory has history data for next report generation
+    # Copy history from storage to results directory for next run
     if os.path.exists(results_dir):
         results_history_dir = os.path.join(results_dir, "history")
         ensure_dir_exists(results_history_dir)
 
-        if os.path.exists(history_storage) and any(os.listdir(history_storage)):
-            logger.info("Copying history from storage to results directory")
-            try:
-                # Copy each file individually to avoid directory structure issues
-                for history_file in os.listdir(history_storage):
-                    src_file = os.path.join(history_storage, history_file)
-                    dst_file = os.path.join(results_history_dir, history_file)
-
-                    if os.path.isfile(src_file):
-                        shutil.copy2(src_file, dst_file)
-
-                logger.info("Successfully copied history to results directory")
-            except Exception as e:
-                logger.error(f"Error copying history to results: {str(e)}")
+        copy_files_between_directories(history_storage, results_history_dir, "Storage to results: ")

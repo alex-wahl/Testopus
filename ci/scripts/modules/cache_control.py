@@ -96,6 +96,69 @@ def add_cache_control(report_dir: str) -> None:
     logger.info(f"Added cache control meta tags to {fixed_count} HTML files")
 
 
+def get_spinner_css(templates_dir=None):
+    """Get CSS for fixing spinner animations.
+
+    Args:
+        templates_dir: Directory containing templates (default: derived from module path)
+
+    Returns:
+        str: CSS content for fixing spinner animations
+    """
+    if templates_dir is None:
+        templates_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "templates")
+
+    spinner_css_path = os.path.join(templates_dir, "spinner_fix.css")
+
+    if not os.path.exists(spinner_css_path):
+        logger.warning(f"Spinner CSS template not found at {spinner_css_path}")
+        return """/* Ensure spinners don't stay visible indefinitely */
+.spinner, .spinner_centered, [class*="spinner"] {
+  animation-duration: 2s !important;
+  animation-iteration-count: 1 !important;
+}"""
+
+    # Read the spinner CSS template
+    try:
+        with open(spinner_css_path, "r", encoding="utf-8") as f:
+            return f.read()
+    except Exception as e:
+        logger.warning(f"Error reading spinner CSS template: {str(e)}")
+        return ""
+
+
+def remove_refresh_meta_tags(content):
+    """Remove meta refresh tags from HTML content.
+
+    Args:
+        content: HTML content
+
+    Returns:
+        tuple: (Modified content, Whether content was modified)
+    """
+    if '<meta http-equiv="refresh"' in content:
+        new_content = content.replace('<meta http-equiv="refresh"', "<!-- removed refresh -->")
+        return new_content, new_content != content
+    return content, False
+
+
+def add_spinner_fix_styles(content, spinner_css):
+    """Add CSS styles to fix spinner animations.
+
+    Args:
+        content: HTML content
+        spinner_css: CSS content to add
+
+    Returns:
+        tuple: (Modified content, Whether content was modified)
+    """
+    if "</head>" in content and "spinner-fix-styles" not in content:
+        spinner_style_block = f'<style id="spinner-fix-styles">\n{spinner_css}\n</style>\n</head>'
+        new_content = content.replace("</head>", spinner_style_block)
+        return new_content, new_content != content
+    return content, False
+
+
 def remove_problematic_elements(report_dir: str) -> None:
     """Remove elements that might cause loading or display issues.
 
@@ -110,24 +173,8 @@ def remove_problematic_elements(report_dir: str) -> None:
         logger.info(f"DRY-RUN: Would remove problematic elements from HTML files in {report_dir}")
         return
 
-    # Load spinner fix CSS template
-    spinner_css_path = os.path.join(
-        os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-        "templates",
-        "spinner_fix.css",
-    )
-
-    if not os.path.exists(spinner_css_path):
-        logger.warning(f"Spinner CSS template not found at {spinner_css_path}")
-        spinner_css = """/* Ensure spinners don't stay visible indefinitely */
-.spinner, .spinner_centered, [class*="spinner"] {
-  animation-duration: 2s !important;
-  animation-iteration-count: 1 !important;
-}"""
-    else:
-        # Read the spinner CSS template
-        with open(spinner_css_path, "r", encoding="utf-8") as f:
-            spinner_css = f.read()
+    # Load spinner fix CSS
+    spinner_css = get_spinner_css()
 
     html_files = glob.glob(os.path.join(report_dir, "**", "*.html"), recursive=True)
     fixed_count = 0
@@ -140,24 +187,18 @@ def remove_problematic_elements(report_dir: str) -> None:
             modified = False
 
             # Remove meta refresh tags
-            if '<meta http-equiv="refresh"' in content:
-                new_content = content.replace('<meta http-equiv="refresh"', "<!-- removed refresh -->")
-                if new_content != content:
-                    content = new_content
-                    modified = True
+            content, refresh_modified = remove_refresh_meta_tags(content)
+            modified = modified or refresh_modified
 
             # Add CSS to ensure spinners don't stay visible
-            if "</head>" in content and "spinner-fix-styles" not in content:
-                spinner_style_block = f'<style id="spinner-fix-styles">\n{spinner_css}\n</style>\n</head>'
-                new_content = content.replace("</head>", spinner_style_block)
-                if new_content != content:
-                    content = new_content
-                    modified = True
+            content, spinner_modified = add_spinner_fix_styles(content, spinner_css)
+            modified = modified or spinner_modified
 
             if modified:
                 with open(html_file, "w", encoding="utf-8") as f:
                     f.write(content)
                 fixed_count += 1
+
         except Exception as e:
             logger.error(f"Error fixing problematic elements in {html_file}: {str(e)}")
 

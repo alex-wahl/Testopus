@@ -10,6 +10,3 @@ try:
     from .customize_allure_report import __version__
 except ImportError:
     __version__ = "0.0.0"  # Default version if not found
-
-# Make important modules available at package level
-from . import modules, utils
