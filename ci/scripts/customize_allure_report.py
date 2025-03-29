@@ -874,6 +874,81 @@ def preserve_history(report_dir: str) -> None:
                 logger.error(f"Error copying history to results: {str(e)}")
 
 
+def fix_missing_test_results(report_dir: str) -> None:
+    """Add JavaScript to handle 404 errors when test results are missing.
+    
+    Args:
+        report_dir: Path to the Allure report directory.
+    """
+    index_file = os.path.join(report_dir, "index.html")
+    if not os.path.exists(index_file):
+        logger.warning(f"index.html not found at {index_file}")
+        return
+        
+    try:
+        with open(index_file, 'r', encoding='utf-8') as f:
+            content = f.read()
+        
+        # Add script to handle missing test results
+        if '</head>' in content:
+            fix_404_script = """
+    <script type="text/javascript">
+    // Fix for 404 errors when test results are missing
+    document.addEventListener('DOMContentLoaded', function() {
+        // Intercept AJAX requests to detect 404 errors for test results
+        var originalFetch = window.fetch;
+        window.fetch = function(url, options) {
+            return originalFetch(url, options).then(function(response) {
+                // If request is for a test result and fails with 404
+                if (response.status === 404 && url.includes('/data/test-cases/')) {
+                    console.warn('Test result not found:', url);
+                    
+                    // Create a minimal valid test result to prevent UI errors
+                    return new Response(JSON.stringify({
+                        uid: url.split('/').pop(),
+                        name: 'Test result not available',
+                        status: 'unknown',
+                        time: { start: 0, stop: 0, duration: 0 },
+                        statusDetails: { 
+                            message: 'This test result is no longer available in the report.',
+                            trace: 'The test data may have been removed or the ID changed between test runs.' 
+                        }
+                    }), {
+                        status: 200,
+                        headers: { 'Content-Type': 'application/json' }
+                    });
+                }
+                return response;
+            });
+        };
+        
+        // Also handle direct navigation to test cases that don't exist
+        var handleMissingTest = function(e) {
+            if (e.target.classList.contains('test-case')) {
+                var uid = e.target.getAttribute('href').split('/').pop();
+                if (!document.querySelector('[data-uid="' + uid + '"]')) {
+                    e.preventDefault();
+                    alert('Test result not available. The test may have been removed or renamed in a recent run.');
+                }
+            }
+        };
+        
+        // Add click handler to test-result links
+        document.addEventListener('click', handleMissingTest, true);
+    });
+    </script>
+"""
+            content = content.replace('</head>', fix_404_script + '</head>')
+            
+            with open(index_file, 'w', encoding='utf-8') as f:
+                f.write(content)
+            logger.info(f"Added 404 handling script to index.html")
+        else:
+            logger.warning("Could not find </head> in index.html")
+    except Exception as e:
+        logger.error(f"Failed to add 404 handling script: {str(e)}")
+
+
 def parse_args():
     """Parse command line arguments.
     
@@ -898,76 +973,59 @@ def parse_args():
 
 
 def main() -> int:
-    """Entry point for the script."""
-    global DRY_RUN
+    """Main entry point for the script.
     
+    Returns:
+        int: Exit code (0 for success, non-zero for errors)
+    """
+    # Process command line arguments
     args = parse_args()
     
-    # Set dry run mode if specified
+    # Set global dry-run mode
+    global DRY_RUN
     DRY_RUN = args.dry_run
-    if DRY_RUN:
-        logger.info("Running in dry-run mode, no changes will be applied")
     
-    report_dir = args.report_dir
-    create_dummy = args.dummy
-    custom_branch = args.branch
-    preserve_test_history = args.history
+    # Log script version and arguments
+    logger.info(f"Allure Report Customizer v{__version__}")
+    logger.info(f"Arguments: {args}")
     
-    logger.info(f"Processing Allure report in {report_dir}...")
+    # Determine report directory
+    report_dir = args.report_dir or os.environ.get('ALLURE_REPORT_DIR', './reports/allure-report')
+    report_dir = os.path.abspath(report_dir)
+    logger.info(f"Using report directory: {report_dir}")
     
-    # Create dummy report if requested
-    if create_dummy:
-        create_dummy_report(report_dir)
-        logger.info("Dummy report created successfully!")
-        return 0
+    # Ensure the report directory exists
+    if not os.path.exists(report_dir):
+        if args.dummy or os.environ.get('ALLURE_CREATE_DUMMY', '').lower() in ('true', 'yes', '1'):
+            logger.info(f"Report directory does not exist, creating dummy report at {report_dir}")
+            create_dummy_report(report_dir)
+        else:
+            logger.error(f"Report directory does not exist: {report_dir}")
+            return 1
     
-    # Ensure the directory exists
-    if not os.path.isdir(report_dir):
-        logger.error(f"Error: Directory {report_dir} does not exist!")
-        return 1
+    # Create .nojekyll file for GitHub Pages
+    create_nojekyll_file(report_dir)
     
-    # Check if directory is empty
-    if not os.listdir(report_dir):
-        logger.warning(f"Warning: Directory {report_dir} is empty. Creating dummy report.")
-        create_dummy_report(report_dir)
-        return 0
+    # Add branch information
+    add_branch_info(report_dir, args.branch)
     
-    # Apply customizations (in appropriate order to minimize file reads/writes)
-    try:
-        # 0. Check for existing history to use before customization
-        if preserve_test_history:
-            # This first call checks if we need to copy history TO the report
-            preserve_history(report_dir)
-            
-        # 1. Fix the date formats in various files
-        fix_html_title_tags(report_dir)
-        fix_js_date_formats(report_dir)
-        fix_json_timestamps(report_dir)
-        
-        # 2. Remove problematic elements causing loading issues
-        remove_problematic_elements(report_dir)
-        
-        # 3. Add cache control
-        add_cache_control(report_dir)
-        
-        # 4. Add branch info (with custom branch if provided)
-        add_branch_info(report_dir, custom_branch)
-        
-        # 5. Create .nojekyll file
-        create_nojekyll_file(report_dir)
-        
-        # 6. Preserve history after customization
-        if preserve_test_history:
-            # This second call copies history FROM the report to storage
-            preserve_history(report_dir)
-        
-        logger.info("Allure report customization completed successfully!")
-        return 0
-    except Exception as e:
-        logger.error(f"Error customizing Allure report: {e}")
-        import traceback
-        logger.error(traceback.format_exc())
-        return 1
+    # Fix date format
+    fix_html_title_tags(report_dir)
+    fix_js_date_formats(report_dir)
+    fix_json_timestamps(report_dir)
+    
+    # Add custom CSS
+    add_cache_control(report_dir)
+    
+    # Fix missing test results
+    fix_missing_test_results(report_dir)
+    
+    # If history flag is provided, also preserve history
+    if args.history or os.environ.get('ALLURE_PRESERVE_HISTORY', '').lower() in ('true', 'yes', '1'):
+        preserve_history(report_dir)
+    
+    logger.info(f"Customization complete for {report_dir}")
+    return 0
 
 
 if __name__ == "__main__":
