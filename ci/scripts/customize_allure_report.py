@@ -40,7 +40,6 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional, List, Dict, Any, Union
 import shutil
-from distutils.dir_util import copy_tree
 
 # Set up logging
 logging.basicConfig(
@@ -809,57 +808,41 @@ def create_dummy_report(report_dir: str) -> None:
 
 
 def preserve_history(report_dir: str) -> None:
-    """Preserve Allure history between runs.
-    
-    This function handles preserving test execution history between runs by:
-    1. Looking for the 'history' directory in the report directory
-    2. Copying previous history from storage to the current report
-    3. After report generation, updating the history storage with new data
+    """Preserve test history between runs.
     
     Args:
-        report_dir: Path to the Allure report directory
+        report_dir: Path to the Allure report directory.
     """
-    # Define paths
-    history_dir = os.path.join(report_dir, "history")
-    history_storage = os.path.join(os.path.dirname(report_dir), "allure-history")
-    
-    # Skip in dry run mode
-    if DRY_RUN:
-        logger.info(f"DRY RUN: Would manage history between {history_storage} and {history_dir}")
+    # Check if history preservation is enabled
+    preserve_history_env = os.environ.get('ALLURE_PRESERVE_HISTORY', 'true').lower()
+    if preserve_history_env not in ('true', 'yes', '1'):
+        logger.info("History preservation disabled via environment variable")
         return
     
-    # Create history storage if it doesn't exist
+    history_dir = os.path.join(report_dir, 'history')
+    if not os.path.exists(history_dir):
+        logger.warning(f"No history directory found at {history_dir}")
+        return
+    
+    # Create the history directory if it doesn't exist
+    history_storage = os.path.join(os.path.dirname(report_dir), 'allure-history')
     os.makedirs(history_storage, exist_ok=True)
     
-    if os.path.exists(history_dir):
-        # After report generation: Update the history storage with the new history
-        logger.info(f"Updating history storage at {history_storage}")
-        
-        # Create history storage dir if it doesn't exist
-        os.makedirs(history_storage, exist_ok=True)
-        
-        # Copy current history to storage
-        try:
-            copy_tree(history_dir, history_storage)
-            logger.info(f"Successfully updated history storage with data from {history_dir}")
-        except Exception as e:
-            logger.error(f"Error copying history to storage: {str(e)}")
-    else:
-        # Before report generation: Check if we have stored history to use
-        if os.path.exists(history_storage) and os.listdir(history_storage):
-            logger.info(f"Copying previous history from {history_storage} to current results")
+    if DRY_RUN:
+        logger.info(f"DRY-RUN: Would copy history from {history_dir} to {history_storage}")
+        return
+    
+    try:
+        # First remove the destination directory if it exists (shutil.copytree requires destination to not exist)
+        if os.path.exists(history_storage):
+            shutil.rmtree(history_storage)
             
-            # Create history dir if it doesn't exist
-            os.makedirs(history_dir, exist_ok=True)
-            
-            # Copy stored history to current report
-            try:
-                copy_tree(history_storage, history_dir)
-                logger.info(f"Successfully copied history to {history_dir}")
-            except Exception as e:
-                logger.error(f"Error copying history to report directory: {str(e)}")
-        else:
-            logger.info("No previous history found")
+        # Then copy the directory
+        shutil.copytree(history_dir, history_storage, dirs_exist_ok=True)
+        
+        logger.info(f"Preserved test history to {history_storage}")
+    except Exception as e:
+        logger.error(f"Failed to preserve history: {str(e)}")
 
 
 def parse_args():
