@@ -27,3 +27,17 @@ repos:
         files: ^ci/scripts/
         args: ["--select=E9,F63,F7,F82", "--show-source", "--statistics"]
         additional_dependencies: [flake8-docstrings]
+
+-   repo: https://github.com/pycqa/pylint
+    rev: v3.1.0
+    hooks:
+    -   id: pylint
+        files: ^ci/scripts/
+        args: ["--disable=all", "--enable=unused-import,unused-variable,unused-argument,undefined-variable"]
+
+-   repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.9.0
+    hooks:
+    -   id: mypy
+        files: ^ci/scripts/
+        args: ["--ignore-missing-imports"]

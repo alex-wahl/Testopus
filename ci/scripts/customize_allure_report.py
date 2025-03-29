@@ -135,9 +135,7 @@ def main():
     if not os.path.exists(nojekyll_path):
         logger.info("Creating {0} file at {1}".format(NOJEKYLL_FILE, nojekyll_path))
         if not args.dry_run:
-            with open(nojekyll_path, "w") as f:
-                # Empty file is sufficient
-                pass
+            open(nojekyll_path, "w").close()  # Create empty file
             logger.info("Created {0} file at {1}".format(NOJEKYLL_FILE, nojekyll_path))
 
     # Get branch name from arguments or environment variables

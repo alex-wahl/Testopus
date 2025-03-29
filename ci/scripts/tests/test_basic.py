@@ -10,17 +10,26 @@ import shutil
 import sys
 import tempfile
 import unittest
-from pathlib import Path
 
-# Add the parent directory to the path so we can import the script
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+# Try importing modules directly, and if that fails, adjust path
+try:
+    import customize_allure_report
+    from modules.branch_info import get_branch_name
+    from modules.date_formatter import get_current_date_formatted
+    from modules.dummy_report import create_dummy_report
 
-# Now import the modules
-from customize_allure_report import __version__
-from modules.branch_info import get_branch_name
-from modules.date_formatter import get_current_date_formatted
+    from utils.constants import VERSION
+except ImportError:
+    # Add parent directory to path and try again
+    parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    sys.path.insert(0, parent_dir)
 
-from utils.constants import VERSION
+    import customize_allure_report
+    from modules.branch_info import get_branch_name
+    from modules.date_formatter import get_current_date_formatted
+    from modules.dummy_report import create_dummy_report
+
+    from utils.constants import VERSION
 
 
 class TestBasicFunctionality(unittest.TestCase):
@@ -54,7 +63,7 @@ class TestBasicFunctionality(unittest.TestCase):
         Verifies that the version in the main script matches the expected version
         from constants.
         """
-        self.assertEqual(__version__, VERSION)
+        self.assertEqual(customize_allure_report.__version__, VERSION)
 
     def test_get_current_date_formatted(self):
         """Test that get_current_date_formatted returns a string.
@@ -80,8 +89,6 @@ class TestBasicFunctionality(unittest.TestCase):
         Verifies that the dummy report creation function correctly creates
         the necessary files and directory structure.
         """
-        from modules.dummy_report import create_dummy_report
-
         # Remove the report directory
         shutil.rmtree(self.report_dir, ignore_errors=True)
         # Create the dummy report

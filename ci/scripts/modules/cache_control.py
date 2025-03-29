@@ -9,19 +9,16 @@ import glob
 import logging
 import os
 from pathlib import Path
-from typing import List
 
 # Handle both relative imports for package usage and direct imports for script execution
 try:
     from ..utils.constants import CACHE_CONTROL_HEADERS, CACHE_CONTROL_META
-    from ..utils.file_utils import read_file, write_file
 except ImportError:
     # When run directly
     import sys
 
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
     from utils.constants import CACHE_CONTROL_HEADERS, CACHE_CONTROL_META
-    from utils.file_utils import read_file, write_file
 
 # Set up logging
 logger = logging.getLogger("allure-customizer.cache-control")
@@ -54,9 +51,7 @@ def create_nojekyll_file(report_dir: str) -> None:
         return
 
     nojekyll_path = os.path.join(report_dir, ".nojekyll")
-    with open(nojekyll_path, "w") as f:
-        pass
-
+    open(nojekyll_path, "w").close()  # Create empty file
     logger.info(f"Created .nojekyll file at {nojekyll_path}")
 
 

@@ -9,7 +9,6 @@ import logging
 import os
 import shutil
 from pathlib import Path
-from typing import Optional
 
 # Handle both relative imports for package usage and direct imports for script execution
 try:
@@ -108,7 +107,7 @@ def preserve_history(report_dir: str) -> None:
         ensure_dir_exists(results_history_dir)
 
         if os.path.exists(history_storage) and any(os.listdir(history_storage)):
-            logger.info(f"Copying history from storage to results directory")
+            logger.info("Copying history from storage to results directory")
             try:
                 # Copy each file individually to avoid directory structure issues
                 for history_file in os.listdir(history_storage):
@@ -118,6 +117,6 @@ def preserve_history(report_dir: str) -> None:
                     if os.path.isfile(src_file):
                         shutil.copy2(src_file, dst_file)
 
-                logger.info(f"Successfully copied history to results directory")
+                logger.info("Successfully copied history to results directory")
             except Exception as e:
                 logger.error(f"Error copying history to results: {str(e)}")

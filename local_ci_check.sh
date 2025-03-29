@@ -41,7 +41,7 @@ flake8 ci/scripts --count --exit-zero --max-complexity=10 --max-line-length=127 
 
 echo "🔍 Running static analysis (pylint)..."
 # For initial push, just report but don't fail on unused imports and variables
-pylint --disable=all --enable=undefined-variable ci/scripts
+pylint --disable=all --enable=unused-import,unused-variable,unused-argument,undefined-variable ci/scripts
 
 echo "🔍 Running type checking (mypy)..."
 # For initial push, just report but don't fail
@@ -56,6 +56,18 @@ python -m unittest discover tests || {
     popd > /dev/null
     exit 1
 }
+popd > /dev/null
+
+echo "📊 Running tests with coverage..."
+pushd ci/scripts > /dev/null
+python -m pip install coverage >/dev/null 2>&1 || { echo "⚠️ Coverage is not installed. Skipping coverage report."; }
+coverage run -m unittest discover tests || {
+    echo "❌ Coverage tests failed. Please fix them before pushing."
+    popd > /dev/null
+    exit 1
+}
+coverage report -m
+coverage xml
 popd > /dev/null
 
 echo "✅ All checks passed! Your code is ready to be pushed."

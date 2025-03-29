@@ -9,7 +9,7 @@ import glob
 import logging
 import os
 import shutil
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import List, Optional, Tuple
 
 # Set up logging
 logger = logging.getLogger("allure-customizer.file-utils")
