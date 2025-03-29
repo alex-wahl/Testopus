@@ -1,0 +1,5 @@
+/* Ensure spinners don't stay visible indefinitely */
+.spinner, .spinner_centered, [class*="spinner"] {
+  animation-duration: 2s !important;
+  animation-iteration-count: 1 !important;
+} 

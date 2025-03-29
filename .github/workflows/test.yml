@@ -166,13 +166,22 @@ jobs:
             # Generate the report
             ./allure-2.24.0/bin/allure generate reports/allure-results -o reports/allure-report --clean
             
-            # Customize the report using our Python script
-            python3 ci/scripts/customize_allure_report.py reports/allure-report
+            # Check if report generation was successful
+            if [ $? -ne 0 ]; then
+              echo "::warning::Allure report generation failed, creating dummy report"
+              python3 ci/scripts/customize_allure_report.py --dummy
+            else
+              # Customize the report using our Python script
+              python3 ci/scripts/customize_allure_report.py
+            fi
           else
             echo "No Allure results found, creating a dummy report"
-            python3 ci/scripts/customize_allure_report.py reports/allure-report --dummy
+            python3 ci/scripts/customize_allure_report.py --dummy
           fi
         env:
+          ALLURE_REPORT_DIR: reports/allure-report
+          ALLURE_CREATE_DUMMY: false
+          ALLURE_BRANCH: ${{ github.head_ref || github.ref_name }}
           GITHUB_REF: ${{ github.ref }}
           GITHUB_HEAD_REF: ${{ github.head_ref }}
       
