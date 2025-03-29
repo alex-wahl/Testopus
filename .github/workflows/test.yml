@@ -190,6 +190,16 @@ jobs:
           path: reports/allure-report
           retention-days: 30
       
+      # For direct branch upload - GitHub Pages is configured to use the 'reporting' branch
+      - name: Deploy to reporting branch
+        if: always() && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./reports/allure-report
+          publish_branch: reporting
+          force_orphan: true
+      
       # Comment on PR with link to reports
       - name: Comment PR with Report Links
         if: always() && github.event_name == 'pull_request'
@@ -213,17 +223,3 @@ jobs:
               repo: context.repo.repo,
               body: comment
             });
-  
-  # Deployment job
-  deploy:
-    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
-    needs: test
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    
-    steps:
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v3
