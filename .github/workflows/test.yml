@@ -172,6 +172,9 @@ jobs:
             echo "No Allure results found, creating a dummy report"
             python3 ci/scripts/customize_allure_report.py reports/allure-report --dummy
           fi
+        env:
+          GITHUB_REF: ${{ github.ref }}
+          GITHUB_HEAD_REF: ${{ github.head_ref }}
       
       # Upload test reports as artifacts
       - name: Upload test reports
@@ -214,7 +217,7 @@ jobs:
           enable_jekyll: false
           keep_files: false
       
-      # Comment on PR with link to reports
+      # Comment on PR with Report Links
       - name: Comment PR with Report Links
         if: always() && github.event_name == 'pull_request'
         uses: actions/github-script@v7
@@ -227,7 +230,7 @@ jobs:
             
             #### Report Links:
             - [Download Test Reports](${artifactUrl})
-            - [View Allure Report](${pagesUrl}) (available after merge to main)
+            - [View Allure Report](${pagesUrl}) (updated with latest results)
             
             *Tests run by GitHub Actions workflow*`;
             

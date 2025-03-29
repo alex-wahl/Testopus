@@ -83,6 +83,59 @@ def add_cache_headers(report_dir: str) -> None:
     print("✅ Added cache control headers")
 
 
+def add_branch_info(report_dir: str) -> None:
+    """Add git branch information to environment properties.
+    
+    Reads the branch name from GITHUB_REF or GITHUB_HEAD_REF environment variables
+    and adds it to the Allure environment.properties file.
+    
+    Args:
+        report_dir: Path to the Allure report directory.
+    """
+    env_file = os.path.join(report_dir, "environment.properties")
+    
+    # Try to get branch name from environment variables
+    branch = os.environ.get('GITHUB_HEAD_REF', '')  # For pull requests
+    if not branch:
+        ref = os.environ.get('GITHUB_REF', '')      # For direct pushes
+        if ref.startswith('refs/heads/'):
+            branch = ref.replace('refs/heads/', '')
+    
+    if not branch:
+        try:
+            # Try to get from git command as fallback
+            import subprocess
+            branch = subprocess.check_output(['git', 'rev-parse', '--abbrev-ref', 'HEAD'], 
+                                           stderr=subprocess.DEVNULL).decode('utf-8').strip()
+        except (subprocess.SubprocessError, FileNotFoundError):
+            branch = 'unknown'
+    
+    # Read existing environment properties
+    if os.path.exists(env_file):
+        with open(env_file, 'r', encoding='utf-8') as f:
+            lines = f.readlines()
+    else:
+        lines = []
+    
+    # Check if Branch property already exists
+    branch_exists = False
+    for i, line in enumerate(lines):
+        if line.startswith('Branch='):
+            lines[i] = f'Branch={branch}\n'
+            branch_exists = True
+            break
+    
+    # Add branch if it doesn't exist
+    if not branch_exists:
+        lines.append(f'Branch={branch}\n')
+    
+    # Write updated environment properties
+    with open(env_file, 'w', encoding='utf-8') as f:
+        f.writelines(lines)
+    
+    print(f"✅ Added branch information: {branch}")
+
+
 def fix_date_formats_in_json(report_dir: str) -> None:
     """Fix timestamp format in JSON files.
     
@@ -298,6 +351,7 @@ def main() -> int:
     fix_title_date_format(report_dir)
     create_cache_busting_script(report_dir, timestamp)
     add_cache_headers(report_dir)
+    add_branch_info(report_dir)
     add_cache_busting_to_html(report_dir, timestamp)
     create_nojekyll_file(report_dir)
     

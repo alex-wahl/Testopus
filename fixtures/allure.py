@@ -4,6 +4,7 @@ import sys
 import time
 import datetime
 import allure
+import subprocess
 from pathlib import Path
 
 # Make sure directories exist
@@ -141,6 +142,21 @@ def pytest_sessionfinish(session):
     browser_name = os.environ.get("BROWSER", "Chrome")
     browser_version = os.environ.get("BROWSER_VERSION", "latest")
 
+    # Try to get branch info
+    branch = os.environ.get('GITHUB_HEAD_REF', '')  # For pull requests
+    if not branch:
+        ref = os.environ.get('GITHUB_REF', '')      # For direct pushes
+        if ref.startswith('refs/heads/'):
+            branch = ref.replace('refs/heads/', '')
+    
+    if not branch:
+        try:
+            # Try to get from git command as fallback
+            branch = subprocess.check_output(['git', 'rev-parse', '--abbrev-ref', 'HEAD'], 
+                                           stderr=subprocess.DEVNULL).decode('utf-8').strip()
+        except (subprocess.SubprocessError, FileNotFoundError):
+            branch = 'unknown'
+
     # Set timezone to Berlin
     os.environ['TZ'] = 'Europe/Berlin'
     time.tzset()  # Apply timezone change
@@ -152,6 +168,7 @@ def pytest_sessionfinish(session):
         f.write(f"Python.Version={sys.version.split(' ')[0]}\n")
         f.write(f"Timestamp={datetime.datetime.now().isoformat()}\n")
         f.write(f"Timezone=Europe/Berlin\n")
+        f.write(f"Branch={branch}\n")
 
 # Add additional metadata using Allure's API
 @pytest.hookimpl(hookwrapper=True)
