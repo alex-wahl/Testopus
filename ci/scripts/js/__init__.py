@@ -3,4 +3,4 @@
 
 This package contains JavaScript files used to enhance
 and customize Allure report functionality.
-""" 
+"""

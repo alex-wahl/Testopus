@@ -27,16 +27,19 @@ import argparse
 import logging
 import os
 import sys
+from pathlib import Path
 
-# Importing our modules
-from modules.branch_info import add_branch_info
-from modules.cache_control import add_cache_control
-from modules.date_formatter import fix_date_formats
-from modules.dummy_report import create_dummy_report
-from modules.error_handling import setup_error_handling
-from modules.history import preserve_history
+# Set up Python path for imports
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
-from utils.constants import (
+# Import modules from the project
+from ci.scripts.modules.branch_info import add_branch_info  # noqa: E402
+from ci.scripts.modules.cache_control import add_cache_control  # noqa: E402
+from ci.scripts.modules.date_formatter import fix_date_formats  # noqa: E402
+from ci.scripts.modules.dummy_report import create_dummy_report  # noqa: E402
+from ci.scripts.modules.error_handling import setup_error_handling  # noqa: E402
+from ci.scripts.modules.history import preserve_history  # noqa: E402
+from ci.scripts.utils.constants import (  # noqa: E402
     DEFAULT_REPORT_DIR,
     ENV_BRANCH,
     ENV_CREATE_DUMMY,

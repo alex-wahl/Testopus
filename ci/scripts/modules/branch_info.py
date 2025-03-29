@@ -9,10 +9,16 @@ import logging
 import os
 import re
 import subprocess
+import sys
+from pathlib import Path
 from typing import Optional
 
-from utils.constants import ENV_GITHUB_HEAD_REF, ENV_GITHUB_REF, ENV_PROPERTIES_FILE
-from utils.file_utils import find_files, read_file, write_file
+# Set up Python path for imports
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
+
+# Import from project
+from ci.scripts.utils.constants import ENV_GITHUB_HEAD_REF, ENV_GITHUB_REF, ENV_PROPERTIES_FILE  # noqa: E402
+from ci.scripts.utils.file_utils import find_files, read_file, write_file  # noqa: E402
 
 # Set up logging
 logger = logging.getLogger("allure-customizer.branch-info")

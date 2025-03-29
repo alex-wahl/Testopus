@@ -3,4 +3,4 @@
 
 This package contains HTML and CSS templates used for
 generating custom Allure reports and dummy reports.
-""" 
+"""
