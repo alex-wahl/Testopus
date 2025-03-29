@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """File utility functions for Allure report customization.
 
-This module provides common file operations used in the Allure report customization process.
+This module provides common file operations used in the Allure report customization process,
+with consistent error handling and logging.
 """
 
 import os

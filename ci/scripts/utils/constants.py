@@ -1,7 +1,26 @@
 #!/usr/bin/env python3
 """Constants for Allure report customization.
 
-This module provides constants used throughout the Allure report customization process.
+This module provides constants used throughout the Allure report customization process,
+defining paths, environment variables, file patterns, and predefined content.
+
+Attributes:
+    VERSION: The version string for the customization script
+    SCRIPT_DIR: Path to the scripts directory
+    TEMPLATES_DIR: Path to the templates directory
+    JS_DIR: Path to the JavaScript files directory
+    PROJECT_ROOT: Path to the project root directory
+    DEFAULT_REPORTS_DIR: Path to the reports directory
+    DEFAULT_REPORT_DIR: Path to the Allure report directory
+    DEFAULT_RESULTS_DIR: Path to the Allure results directory
+    DEFAULT_HISTORY_DIR: Path to the Allure history directory
+    ENV_*: Environment variable names
+    *_FILES: File pattern globs
+    *_FILE: File names
+    JS_*: JavaScript file names
+    DATE_PATTERN_*: Regex patterns for date formats
+    ISO_TIMESTAMP_PATTERN: Regex pattern for ISO timestamps
+    CACHE_CONTROL_*: Content for cache control directives
 """
 
 import os
@@ -15,10 +34,14 @@ SCRIPT_DIR = Path(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 TEMPLATES_DIR = SCRIPT_DIR / "templates"
 JS_DIR = SCRIPT_DIR / "js"
 
-# Default paths
-DEFAULT_REPORT_DIR = "reports/allure-report"
-DEFAULT_RESULTS_DIR = "reports/allure-results"
-DEFAULT_HISTORY_DIR = "reports/allure-history"
+# Project root directory - one more level up from script directory
+PROJECT_ROOT = Path(os.path.dirname(os.path.dirname(SCRIPT_DIR)))
+
+# Default paths (relative to project root)
+DEFAULT_REPORTS_DIR = os.path.join(PROJECT_ROOT, "reports")
+DEFAULT_REPORT_DIR = os.path.join(DEFAULT_REPORTS_DIR, "allure-report")
+DEFAULT_RESULTS_DIR = os.path.join(DEFAULT_REPORTS_DIR, "allure-results")
+DEFAULT_HISTORY_DIR = os.path.join(DEFAULT_REPORTS_DIR, "allure-history")
 
 # Environment variable names
 ENV_REPORT_DIR = "ALLURE_REPORT_DIR"

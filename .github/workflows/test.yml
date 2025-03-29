@@ -111,49 +111,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       
-      # Run tests based on test suite
+      # Run tests using reusable action
       - name: Run tests
-        env:
-          DEBUG_MODE: ${{ needs.setup.outputs.debug_mode == 'true' }}
-          PYTHONPATH: /app
-          DOCKER_ENV: true
-          PYTEST_ADDOPTS: --verbose
-          TZ: Europe/Berlin
-        run: |
-          case "${{ needs.setup.outputs.test_suite }}" in
-            "ui")
-              docker compose -f docker/docker-compose.yml run --rm testopus \
-                --verbose -vv \
-                --alluredir=/app/reports/allure-results \
-                --html=/app/reports/html/report.html \
-                --junitxml=/app/reports/junit/report_ui.xml \
-                /app/tests/ui_tests/web ${{ needs.setup.outputs.custom_flags }}
-              ;;
-            "api")
-              docker compose -f docker/docker-compose.yml run --rm testopus \
-                --verbose -vv \
-                --alluredir=/app/reports/allure-results \
-                --html=/app/reports/html/report.html \
-                --junitxml=/app/reports/junit/report_api.xml \
-                /app/tests/api_tests ${{ needs.setup.outputs.custom_flags }}
-              ;;
-            "internal")
-              docker compose -f docker/docker-compose.yml run --rm testopus \
-                --verbose -vv \
-                --alluredir=/app/reports/allure-results \
-                --html=/app/reports/html/report.html \
-                --junitxml=/app/reports/junit/report_internal.xml \
-                /app/tests/internal_tests ${{ needs.setup.outputs.custom_flags }}
-              ;;
-            *)
-              docker compose -f docker/docker-compose.yml run --rm testopus \
-                --verbose -vv \
-                --alluredir=/app/reports/allure-results \
-                --html=/app/reports/html/report.html \
-                --junitxml=/app/reports/junit/report_all.xml \
-                /app/tests ${{ needs.setup.outputs.custom_flags }}
-              ;;
-          esac
+        uses: ./.github/actions/run-tests
+        with:
+          test_suite: ${{ needs.setup.outputs.test_suite }}
+          debug_mode: ${{ needs.setup.outputs.debug_mode }}
+          custom_flags: ${{ needs.setup.outputs.custom_flags }}
       
       # Clean up containers
       - name: Clean up containers

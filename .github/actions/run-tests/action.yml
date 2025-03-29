@@ -1,0 +1,64 @@
+name: 'Run Tests'
+description: 'Run Testopus tests with specified parameters'
+inputs:
+  test_suite:
+    description: 'Test suite to run (ui, api, internal, all)'
+    required: true
+    default: 'all'
+  debug_mode:
+    description: 'Enable debug mode'
+    required: false
+    default: 'false'
+  custom_flags:
+    description: 'Additional custom flags'
+    required: false
+    default: ''
+runs:
+  using: 'composite'
+  steps:
+    - name: Run tests
+      shell: bash
+      env:
+        DEBUG_MODE: ${{ inputs.debug_mode == 'true' }}
+        PYTHONPATH: /app
+        DOCKER_ENV: true
+        PYTEST_ADDOPTS: --verbose
+        TZ: Europe/Berlin
+      run: |
+        # Ensure reports directory exists
+        mkdir -p reports/{allure-results,html,junit,screenshots}
+        
+        case "${{ inputs.test_suite }}" in
+          "ui")
+            docker compose -f docker/docker-compose.yml run --rm testopus \
+              --verbose -vv \
+              --alluredir=/app/reports/allure-results \
+              --html=/app/reports/html/report.html \
+              --junitxml=/app/reports/junit/report_ui.xml \
+              /app/tests/ui_tests/web ${{ inputs.custom_flags }}
+            ;;
+          "api")
+            docker compose -f docker/docker-compose.yml run --rm testopus \
+              --verbose -vv \
+              --alluredir=/app/reports/allure-results \
+              --html=/app/reports/html/report.html \
+              --junitxml=/app/reports/junit/report_api.xml \
+              /app/tests/api_tests ${{ inputs.custom_flags }}
+            ;;
+          "internal")
+            docker compose -f docker/docker-compose.yml run --rm testopus \
+              --verbose -vv \
+              --alluredir=/app/reports/allure-results \
+              --html=/app/reports/html/report.html \
+              --junitxml=/app/reports/junit/report_internal.xml \
+              /app/tests/internal_tests ${{ inputs.custom_flags }}
+            ;;
+          *)
+            docker compose -f docker/docker-compose.yml run --rm testopus \
+              --verbose -vv \
+              --alluredir=/app/reports/allure-results \
+              --html=/app/reports/html/report.html \
+              --junitxml=/app/reports/junit/report_all.xml \
+              /app/tests ${{ inputs.custom_flags }}
+            ;;
+        esac 
