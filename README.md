@@ -48,6 +48,21 @@ testopus/
 │   ├── env_settings/          # Environment-specific settings
 │   ├── pydantic_models/       # Pydantic models for config validation
 │   └── yaml_configs/          # YAML configuration files
+├── ci/                        # CI/CD automation
+│   ├── scripts/               # Python scripts for CI/CD operations
+│   │   ├── templates/         # Template files for reports & components
+│   │   │   ├── dummy_report.html       # Template for empty test reports
+│   │   │   ├── cache_headers.html      # Cache control headers template
+│   │   │   ├── spinner_fix.css         # CSS fixes for spinner animations
+│   │   │   └── inline_date_formatter.js.template  # JS template for date formatting
+│   │   └── js/                # JavaScript for dynamic report modifications
+│   │       ├── date_formatter.js       # Date format standardization
+│   │       ├── branch_position.js      # Branch info positioning
+│   │       └── inline_date_formatter.js # Injected into app.js
+│   ├── docs/                  # Documentation for CI/CD processes
+│   │   ├── github-actions.md  # Detailed GitHub Actions workflow docs
+│   │   └── allure_customization_flow.md # Visual diagram of report customization
+│   └── requirements.txt       # Python dependencies for CI scripts
 ├── docker/                    # Docker configuration
 ├── fixtures/                  # Pytest fixtures
 ├── tests/                     # Test suites
