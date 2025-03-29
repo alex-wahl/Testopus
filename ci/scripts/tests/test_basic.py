@@ -10,26 +10,17 @@ import shutil
 import sys
 import tempfile
 import unittest
+from pathlib import Path
 
-# Try importing modules directly, and if that fails, adjust path
-try:
-    import customize_allure_report
-    from modules.branch_info import get_branch_name
-    from modules.date_formatter import get_current_date_formatted
-    from modules.dummy_report import create_dummy_report
+# Add project root to Python path for imports
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent.parent))
 
-    from utils.constants import VERSION
-except ImportError:
-    # Add parent directory to path and try again
-    parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    sys.path.insert(0, parent_dir)
-
-    import customize_allure_report
-    from modules.branch_info import get_branch_name
-    from modules.date_formatter import get_current_date_formatted
-    from modules.dummy_report import create_dummy_report
-
-    from utils.constants import VERSION
+# Import modules for testing
+from ci.scripts import customize_allure_report  # noqa: E402
+from ci.scripts.modules.branch_info import get_branch_name  # noqa: E402
+from ci.scripts.modules.date_formatter import get_current_date_formatted  # noqa: E402
+from ci.scripts.modules.dummy_report import create_dummy_report  # noqa: E402
+from ci.scripts.utils.constants import VERSION  # noqa: E402
 
 
 class TestBasicFunctionality(unittest.TestCase):

@@ -1,6 +1,6 @@
 [build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
+requires = ["setuptools>=42.0", "wheel"]
+build-backend = "setuptools.build_meta"
 
 [project]
 name = "Testopus"
@@ -45,6 +45,29 @@ dependencies = [
   "requests>=2.31.0",
   "pytest-html>=3.2.0"
 ]
+
+[tool.setuptools]
+package-dir = {"" = "."}
+packages = ["ci"]
+
+[tool.pylance]
+extraPaths = ["."]
+
+[tool.pyright]
+include = ["ci/scripts/**"]
+ignore = ["**/__pycache__/**", "ci/scripts/.mypy_cache/**"]
+extraPaths = ["."]
+
+[tool.black]
+line-length = 127
+
+[tool.isort]
+profile = "black"
+line_length = 127
+
+[tool.pytest.ini_options]
+testpaths = ["ci/scripts/tests"]
+python_paths = ["."]
 
 [tool.hatch.envs.default]
 dependencies = [

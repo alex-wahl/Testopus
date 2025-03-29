@@ -8,10 +8,14 @@ making them more readable and consistent.
 import logging
 import os
 import re
+import sys
 from datetime import datetime
+from pathlib import Path
 
-from utils.constants import DATE_PATTERN_MM_DD_YYYY, ISO_TIMESTAMP_PATTERN
-from utils.file_utils import modify_file
+# Handle imports properly for IDEs and runtime
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
+from ci.scripts.utils.constants import DATE_PATTERN_MM_DD_YYYY, ISO_TIMESTAMP_PATTERN  # noqa: E402
+from ci.scripts.utils.file_utils import modify_file  # noqa: E402
 
 # Set up logging
 logger = logging.getLogger("allure-customizer.date-formatter")
@@ -126,9 +130,7 @@ def fix_json_timestamps(report_dir: str) -> None:
                     logger.warning(f"Failed to process {file_path}: {str(e)}")
 
 
-def _update_js_file_with_date_formatter(
-    file_path: str, code: str, inline: bool = False
-) -> bool:
+def _update_js_file_with_date_formatter(file_path: str, code: str, inline: bool = False) -> bool:
     """Update JavaScript file with date formatter.
 
     Args:
@@ -222,9 +224,7 @@ Date.prototype.toDateString = function() {
             if file.endswith(".js"):
                 file_path = os.path.join(root, file)
                 try:
-                    if _update_js_file_with_date_formatter(
-                        file_path, formatter_code, inline=True
-                    ):
+                    if _update_js_file_with_date_formatter(file_path, formatter_code, inline=True):
                         count += 1
                 except Exception as e:
                     logger.warning(f"Failed to update JavaScript file {file_path}: {e}")
