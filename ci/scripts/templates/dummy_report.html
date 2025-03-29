@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Report</title>
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            line-height: 1.6;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 30px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            background-color: #fff;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+        }
+        h1 {
+            color: #333;
+            margin-top: 0;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 10px;
+        }
+        .warning {
+            color: #e53935;
+            font-weight: bold;
+        }
+        .info {
+            color: #1976D2;
+        }
+        ul {
+            padding-left: 20px;
+        }
+        li {
+            margin-bottom: 8px;
+        }
+        .timestamp {
+            color: #666;
+            font-size: 0.9em;
+            margin-top: 30px;
+            text-align: right;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Test Report</h1>
+        <p class="warning">No test results available for this run.</p>
+        <p class="info">Possible reasons:</p>
+        <ul>
+            <li>No tests were found in the repository</li>
+            <li>Tests were found but not executed properly</li>
+            <li>Tests ran but results were not saved to the correct location</li>
+        </ul>
+        <p>Please check the workflow logs for more information.</p>
+        <p class="timestamp">Generated on: {timestamp}</p>
+    </div>
+</body>
+</html> 
