@@ -312,7 +312,7 @@ jobs:
           publish_branch: reporting
           force_orphan: true
           enable_jekyll: false
-          cname: ${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}
+          cname: ""
           user_name: "github-actions[bot]"
           user_email: "github-actions[bot]@users.noreply.github.com"
           commit_message: "docs: update Allure report [skip ci]"

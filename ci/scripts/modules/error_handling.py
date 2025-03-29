@@ -166,6 +166,9 @@ def fix_missing_test_results(report_dir: str) -> None:
 
     # Create 404.html page for GitHub Pages
     _create_404_page(report_dir)
+    
+    # Create 401.html page for GitHub Pages
+    _create_401_page(report_dir)
 
     # Add error handler script to index.html
     _add_error_handler_to_index(report_dir)
@@ -225,6 +228,37 @@ def _create_404_page(report_dir: str) -> None:
         _create_fallback_404_page(report_dir)
 
 
+def _create_401_page(report_dir: str) -> None:
+    """Create a 401.html page for GitHub Pages.
+
+    Args:
+        report_dir: The report directory path
+    """
+    # Get template path to 401 template
+    template_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "templates")
+    template_path = os.path.join(template_dir, "401.html")
+
+    # If template doesn't exist, create a fallback page
+    if not os.path.exists(template_path):
+        logger.warning(f"401 template not found at {template_path}, using fallback template")
+        _create_fallback_401_page(report_dir)
+        return
+
+    # Read the template and write to report directory
+    try:
+        with open(template_path, "r", encoding="utf-8") as f:
+            content = f.read()
+
+        error_page_path = os.path.join(report_dir, "401.html")
+        with open(error_page_path, "w", encoding="utf-8") as f:
+            f.write(content)
+
+        logger.info(f"Created 401 error page at {error_page_path}")
+    except Exception as e:
+        logger.error(f"Error creating 401 page: {str(e)}")
+        _create_fallback_401_page(report_dir)
+
+
 def _create_fallback_404_page(report_dir: str) -> None:
     """Create a simple fallback 404.html page when template is missing.
 
@@ -249,6 +283,38 @@ def _create_fallback_404_page(report_dir: str) -> None:
         logger.error(f"Critical error: Could not read fallback template: {str(e)}")
         logger.error(f"Cannot create 404 page without a valid template at {fallback_template_path}")
         raise RuntimeError(f"Failed to create 404 page: fallback template missing at {fallback_template_path}")
+
+
+def _create_fallback_401_page(report_dir: str) -> None:
+    """Create a simple fallback 401.html page when template is missing.
+
+    Args:
+        report_dir: The report directory path
+    """
+    # Simple HTML template for 401 page
+    fallback_content = """<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>401 - Unauthorized</title>
+    <style>body{font-family:sans-serif;text-align:center;padding:20px;}</style>
+</head>
+<body>
+    <h1>401 - Unauthorized</h1>
+    <p>You don't have permission to access this resource.</p>
+    <p><a href="/">Go to Homepage</a></p>
+</body>
+</html>"""
+
+    try:
+        error_page_path = os.path.join(report_dir, "401.html")
+        with open(error_page_path, "w", encoding="utf-8") as f:
+            f.write(fallback_content)
+
+        logger.info(f"Created fallback 401 error page at {error_page_path}")
+    except Exception as e:
+        logger.error(f"Error creating fallback 401 page: {str(e)}")
 
 
 def _add_error_handler_to_index(report_dir: str) -> None:
