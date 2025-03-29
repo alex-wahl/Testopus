@@ -42,7 +42,8 @@ dependencies = [
   "pyyaml>=6.0.2",
   "python-dotenv==1.0.1",
   "isort>=5.13.2",
-  "requests>=2.31.0"
+  "requests>=2.31.0",
+  "pytest-html>=3.2.0"
 ]
 
 [tool.hatch.envs.default]
@@ -66,8 +67,14 @@ dependencies = [
 
 [tool.hatch.envs.test.scripts]
 run = "pytest {args:tests}"
-cov = "pytest --cov-report=term-missing --cov=src/testopus {args:tests}"
 internal = "pytest {args:tests/internal_tests}"
+
+# Using direct Allure integration instead of custom plugin
+allure-report = "pytest --alluredir=reports/allure-results {args:tests}"
+html-report = "pytest --html=reports/html/report.html --self-contained-html {args:tests}"
+run-all-reports = "pytest --alluredir=reports/allure-results --html=reports/html/report.html {args:tests}"
+view-allure = "allure serve reports/allure-results"
+generate-allure = "allure generate reports/allure-results -o reports/allure-report --clean && allure open reports/allure-report"
 
 [tool.hatch.envs.ui]
 dependencies = [
@@ -103,6 +110,3 @@ run = "pytest {args:tests/api_tests}"
 # [tool.hatch.envs.docs.scripts]
 # build = "mkdocs build"
 # serve = "mkdocs serve"
-
-[tool.hatch.build.targets.wheel]
-packages = ["src/testopus"]

@@ -3,4 +3,5 @@ pytest_plugins = [  # load the fixtures in this loc without importing from there
     "fixtures.cli",
     "fixtures.setup",
     "fixtures.mocks",
+    "fixtures.allure"
 ]

@@ -27,6 +27,14 @@ on:
         required: false
         type: string
 
+# Sets permissions of the GITHUB_TOKEN to allow deployment to GitHub Pages
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+  checks: write
+  pull-requests: write
+
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -40,6 +48,16 @@ jobs:
           
       - name: Install Hatch
         run: pip install hatch
+      
+      # Make sure reports directories exist
+      - name: Prepare directories
+        run: |
+          mkdir -p reports/allure-results
+          mkdir -p reports/html
+          mkdir -p reports/json
+          mkdir -p reports/screenshots
+          mkdir -p reports/allure-report
+          chmod -R 777 reports
       
       # Setup Docker Buildx for improved caching
       - name: Set up Docker Buildx
@@ -88,7 +106,7 @@ jobs:
           elif [ "${{ github.event.inputs.test_suite }}" = "internal" ]; then
             docker compose -f docker/docker-compose.yml run --rm testopus test:internal ${{ github.event.inputs.custom_flags }}
           else
-            docker compose -f docker/docker-compose.yml up --remove-orphans --exit-code-from testopus
+            docker compose -f docker/docker-compose.yml run --rm testopus test:run-all-reports ${{ github.event.inputs.custom_flags }}
           fi
         env:
           DEBUG_MODE: ${{ github.event.inputs.debug_mode == 'true' }}
@@ -97,10 +115,93 @@ jobs:
         if: always()
         run: docker compose -f docker/docker-compose.yml down --remove-orphans
       
-      # Optional: Upload test artifacts if you have any
-      # - name: Upload test results
-      #   if: always()
-      #   uses: actions/upload-artifact@v3
-      #   with:
-      #     name: test-results
-      #     path: test-results/ 
+      # List report files to verify they exist
+      - name: List reports directory
+        if: always()
+        run: |
+          ls -la reports/
+          ls -la reports/allure-results/ || echo "No allure-results directory"
+          ls -la reports/html/ || echo "No html directory"
+      
+      # Install allure-commandline for report generation
+      - name: Set up Allure
+        if: always()
+        run: |
+          wget -O allure-commandline.zip https://repo.maven.apache.org/maven2/io/qameta/allure/allure-commandline/2.24.0/allure-commandline-2.24.0.zip
+          unzip allure-commandline.zip
+      
+      # Generate Allure report
+      - name: Generate Allure Report
+        if: always()
+        run: |
+          if [ -d "reports/allure-results" ] && [ "$(ls -A reports/allure-results)" ]; then
+            ./allure-2.24.0/bin/allure generate reports/allure-results -o reports/allure-report --clean
+            echo "Allure report generated successfully"
+          else
+            echo "No Allure results found, skipping report generation"
+            mkdir -p reports/allure-report
+            echo "<html><body><h1>No test results available</h1></body></html>" > reports/allure-report/index.html
+          fi
+      
+      # Upload test reports as artifacts
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: test-reports
+          path: |
+            reports/html/
+            reports/json/
+            reports/screenshots/
+            reports/allure-results/
+            reports/allure-report/
+            
+      # Optional: Publish test results
+      - name: Publish Test Results
+        if: always()
+        uses: EnricoMi/publish-unit-test-result-action@v2
+        with:
+          files: reports/json/report_*.json
+          check_name: Test Results
+      
+      # Configure GitHub Pages
+      - name: Setup Pages
+        if: always() && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+        uses: actions/configure-pages@v3
+      
+      # Upload GitHub Pages artifact
+      - name: Upload GitHub Pages artifact
+        if: always() && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+        uses: actions/upload-pages-artifact@v2
+        with:
+          path: 'reports/allure-report'
+      
+      # Deploy to GitHub Pages
+      - name: Deploy to GitHub Pages
+        if: always() && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+        id: deployment
+        uses: actions/deploy-pages@v2
+      
+      # Comment on PR with link to reports
+      - name: Comment PR with Report Links
+        if: always() && github.event_name == 'pull_request'
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const artifactUrl = `${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}`;
+            const pagesUrl = `https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}`;
+            
+            const comment = `### Test Reports 📊
+            
+            #### Report Links:
+            - [Download Test Reports](${artifactUrl})
+            - [View Allure Report](${pagesUrl}) (available after merge to main)
+            
+            *Tests run by GitHub Actions workflow*`;
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: comment
+            }); 

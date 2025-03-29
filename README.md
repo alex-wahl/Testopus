@@ -54,52 +54,266 @@ testopus/
 │   ├── internal_tests/        # Framework internal tests
 │   └── ui_tests/              # UI test cases
 ├── utils/                     # Utility functions
+├── reports/                   # Test reports output directory
+│   ├── html/                  # HTML test reports
+│   ├── json/                  # JSON test reports
+│   ├── custom/                # Custom format reports
+│   ├── screenshots/           # Screenshots of failed tests
+│   ├── allure-results/        # Allure report data
+│   └── allure-report/         # Generated Allure reports
 ```
+
+## Setup and Installation
+
+### Prerequisites
+
+- Python 3.12 or higher
+- Chrome browser (for UI testing)
+- [Allure Command Line Tool](https://docs.qameta.io/allure/#_installing_a_commandline) (optional, for Allure reports)
+
+### Installation
+
+1. Clone the repository
+   ```bash
+   git clone https://github.com/yourusername/testopus.git
+   cd testopus
+   ```
+
+2. Use one of these installation methods:
+
+#### Option 1: Using Hatch (Recommended)
+
+Install [Hatch](https://hatch.pypa.io/) globally:
+```bash
+pip install hatch
+```
+
+Hatch will automatically create and manage virtual environments and dependencies.
+
+#### Option 2: Traditional Virtual Environment
+
+```bash
+# Create and activate virtual environment
+python -m venv .venv
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+
+# Install the package in development mode
+pip install -e .
+```
+
+#### Option 3: Docker (For CI/CD or containerized execution)
+
+Ensure Docker and Docker Compose are installed on your system.
 
 ## Running Tests
 
-### Local Setup with Hatch
+### Using Hatch (Recommended)
 
-[Hatch](https://hatch.pypa.io/) is used for managing the project environments and dependencies.
+Hatch manages environments and dependencies for you, making it the easiest way to run tests:
 
 ```bash
-# Install Hatch if not already installed
-pip install hatch
-
-# Run tests in the test environment
+# Run all tests
 hatch run test:run
 
-# Run tests with coverage
-hatch run test:cov
+# Run UI web tests specifically
+hatch run ui:web
 
-# Run internal tests
+# Run framework internal tests
 hatch run test:internal
 
 # Run tests with specific pytest arguments
-hatch run test:run -v -k "test_email_field_is_accepting_email_addresses or test_wordings"
-
-# Enter a shell in the default environment
-hatch shell
-
-# Enter a shell in the test environment
-hatch shell test
+hatch run test:run -v -k "test_email_field_is_accepting_email_addresses"
 ```
 
-### Running Specific Test Types with Hatch
+### Traditional Method
 
-The project includes specialized environments for different test types:
+If you're using a traditional virtual environment:
 
 ```bash
-# Run UI web tests
-hatch run ui:web
+# Activate virtual environment (if not already active)
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
 
-# Run API tests (not developed atm)
-hatch run api:run
+# Run all tests
+pytest tests
+
+# Run UI web tests specifically
+pytest tests/ui_tests/web
+
+# Run internal tests
+pytest tests/internal_tests
+
+# Run specific test file
+pytest tests/ui_tests/web/gasag/test_gasag.py
+
+# Run tests matching a keyword expression
+pytest -k "test_email_field_is_accepting_email_addresses" tests
 ```
 
-### Development Tools with Hatch
+### Using Docker
 
-Testopus includes Hatch scripts for development tasks:
+```bash
+# Build and run with Docker (runs all tests)
+docker-compose -f docker/docker-compose.yml build
+docker-compose -f docker/docker-compose.yml up --remove-orphans
+
+# Run specific test types in Docker
+docker-compose -f docker/docker-compose.yml run --rm testopus ui:web
+docker-compose -f docker/docker-compose.yml run --rm testopus test:internal
+```
+
+## Test Report Generation
+
+Testopus includes a comprehensive reporting system that provides detailed insights into test execution results.
+
+### Available Report Types
+
+1. **HTML Reports**: Detailed, browser-viewable reports with test results and statistics
+2. **JSON Reports**: Machine-readable reports for data analysis or integration
+3. **Screenshots**: Automatic captures of the browser state when tests fail
+4. **Allure Reports**: Interactive, rich reports with detailed test execution information
+
+### Generating Reports (Hatch Method)
+
+```bash
+# Run tests with Allure reporting
+hatch run test:allure-report
+
+# Run tests with HTML reporting
+hatch run test:html-report
+
+# Run tests with both Allure and HTML reporting
+hatch run test:run-all-reports
+
+# Generate an Allure report from existing results
+hatch run test:generate-allure
+
+# View Allure results directly (without generating a report)
+hatch run test:view-allure
+
+# View the latest HTML report in your browser
+hatch run test:view-report
+```
+
+### Generating Reports (Traditional Method)
+
+```bash
+# Run tests with Allure reporting
+pytest --alluredir=reports/allure-results tests
+
+# Run tests with HTML reporting
+pytest --html=reports/html/report.html --self-contained-html tests
+
+# Generate an Allure report
+allure generate reports/allure-results -o reports/allure-report --clean
+
+# View Allure results directly
+allure serve reports/allure-results
+```
+
+### Viewing Allure Reports
+
+Allure reports provide a rich, interactive experience for analyzing test results.
+
+```bash
+# Generate the report (if not already generated)
+allure generate reports/allure-results -o reports/allure-report --clean
+
+# Open the report in your default browser
+allure open reports/allure-report
+
+# Or use the Hatch convenience commands
+hatch run test:generate-allure  # Generate and open
+hatch run test:view-allure      # View existing results
+```
+
+### Allure Reporting Fixtures
+
+Testopus includes automatic fixtures that enhance Allure reporting without requiring any additional code:
+
+1. **Automatic Screenshot Capture**: When a UI test fails, the framework automatically:
+   - Identifies the WebDriver instance in use
+   - Captures a screenshot at the point of failure
+   - Attaches the screenshot to the Allure report
+   - Saves the screenshot to the reports/screenshots directory
+
+2. **Environment Information**: The framework automatically adds environment details:
+   - Browser and version
+   - Operating system
+   - Python version
+   - Test execution timestamp
+
+3. **Test Metadata Extraction**: Information from test docstrings and pytest markers is automatically added to reports:
+   - Test descriptions from docstrings
+   - Feature, story, and severity markers
+   - Tags and other metadata
+
+These fixtures are located in `fixtures/allure.py` and are loaded automatically, requiring no manual configuration.
+
+### Allure Report Features
+
+Allure provides rich reporting with many features:
+
+- Test categorization by severity, feature, and story
+- Detailed test step tracking
+- Attachments for test data and screenshots
+- Environment information
+- Test history tracking
+- Filtering and searching capabilities
+
+To leverage all these features, use Allure decorators in your tests:
+
+```python
+@allure.epic("User Management")
+@allure.feature("Authentication")
+@allure.story("Login")
+@allure.severity(allure.severity_level.CRITICAL)
+@allure.tag("web", "smoke")
+def test_login():
+    with allure.step("Enter credentials"):
+        # Test code
+        allure.attach("username/password", "Credentials", allure.attachment_type.TEXT)
+    
+    with allure.step("Click login button"):
+        # More test code
+        
+    with allure.step("Verify successful login"):
+        # Verification
+        assert True
+```
+
+### Report Locations
+
+All reports are saved in the `reports/` directory with the following structure:
+
+- **HTML Reports**: `reports/html/report.html`
+- **JSON Reports**: `reports/json/report_TIMESTAMP.json`
+- **Screenshots**: `reports/screenshots/TEST_NAME_TIMESTAMP.png`
+- **Allure Results**: `reports/allure-results/`
+- **Allure Reports**: `reports/allure-report/`
+
+## Configuration
+
+Tests can be configured using YAML files and command-line options.
+
+### Command-Line Configuration
+
+```bash
+# Specify a configuration file
+pytest --config # (is not used atm)
+
+# Override configuration settings
+pytest --override tests
+
+# Specify a test framework
+pytest --framework=selenium tests  # or --framework=playwright (is not used atm)
+
+# Enable AI features (if available)
+pytest --ai tests #  (is not used atm)
+```
+
+## Development Tools
+
+### Code Quality Tools
 
 ```bash
 # Format code with Black
@@ -112,97 +326,11 @@ hatch run lint
 hatch run typecheck
 ```
 
-### Hatch Environment Management
-
-Hatch environments are defined in `pyproject.toml`. The project includes these environments:
-
-- `default`: Development environment with code formatting tools
-- `test`: Testing environment with pytest and coverage tools
-- `ui`: Environment for UI testing with web browsers
-- `api`: Environment for API testing
-
-You can add custom scripts to these environments in the `pyproject.toml` file:
-
-```toml
-[tool.hatch.envs.custom]
-dependencies = [
-  "your-dependencies",
-]
-
-[tool.hatch.envs.custom.scripts]
-run-custom = "your-command {args}"
-```
-
-Then run your custom script with:
-
-```bash
-hatch run custom:run-custom
-```
-
-### Traditional Setup
-
-```bash
-# Setup virtual environment
-python -m venv .venv
-source .venv/bin/activate
-pip install -e .
-
-# Run all tests
-pytest tests
-
-# Run with verbose output
-pytest -v tests
-
-# Run specific test file
-pytest tests/ui_tests/web/gasag/test_gasag.py
-
-# Run tests matching a keyword expression
-pytest -k "test_email_field_is_accepting_email_addresses or test_wordings" tests
-
-# Run tests by marker (not implemented atm)
-pytest -m smoke tests
-```
-
-### Common Pytest Parameters
-
-```bash
-# Run with detailed output (-v), print stdout (-s)
-pytest -v -s tests
-
-# Run specific test by keyword
-pytest -k test_login_with_invalid_credentials tests/ui_tests/web/gasag/test_gasag.py
-
-# Run with JUnit XML report
-pytest --junitxml=results.xml tests
-```
-
-### Docker Setup
-
-```bash
-# Build and run with Docker (run all tests)
-docker-compose -f docker/docker-compose.yml build
-docker-compose -f docker/docker-compose.yml up --remove-orphans
-
-# Run with specific test types in Docker
-docker-compose -f docker/docker-compose.yml run --rm testopus ui:web
-docker-compose -f docker/docker-compose.yml run --rm testopus api:run
-docker-compose -f docker/docker-compose.yml run --rm testopus test:internal
-
-# Run with specific pytest arguments
-docker-compose -f docker/docker-compose.yml run --rm testopus test:run -v -k "test_login_with_invalid_credentials"
-
-# Run and specify environment variables
-docker-compose -f docker/docker-compose.yml run --rm -e ENV=staging -e BROWSER=chrome testopus test:run
-
-# Clean up orphaned containers (if warning persists)
-docker-compose -f docker/docker-compose.yml down --remove-orphans
-```
-
 ## Core Components
 
 ### Base Page
 
-The `BasePage` class provides a comprehensive set of methods for interacting with web pages, including:
+The BasePage class provides a comprehensive set of methods for interacting with web pages, including:
 
 - Element interaction (clicks, text input, form handling)
 - Waiting mechanisms (element presence, visibility, clickability)
@@ -213,6 +341,7 @@ The `BasePage` class provides a comprehensive set of methods for interacting wit
 ### Configuration Management
 
 The framework uses a layered configuration approach:
+
 - Base configuration in YAML files
 - Environment overrides
 - CLI parameters for runtime configuration
@@ -221,7 +350,7 @@ The framework uses a layered configuration approach:
 
 ### Retry Mechanism
 
-Tests can use the `@retry` decorator to automatically retry flaky tests:
+Tests can use the @retry decorator to automatically retry flaky tests:
 
 ```python
 @retry(retries=3, delay=2, on_retry=log_retry)
@@ -231,7 +360,7 @@ def test_login_with_invalid_credentials(self, login_page):
 
 ### Soft Assertions
 
-Tests can use `pytest_check` for soft assertions that continue test execution after failures:
+Tests can use pytest_check for soft assertions that continue test execution after failures:
 
 ```python
 check.is_in(expected_text, actual_text, "Text not found")
@@ -251,10 +380,10 @@ Testopus includes GitHub Actions workflow configuration for continuous integrati
 
 The framework is designed for extension:
 
-1. **New Page Objects**: Create new page classes extending `BasePage`
-2. **New Test Suites**: Add new directories under the appropriate test type
-3. **New Environments**: Define additional environments in `pyproject.toml`
-4. **New Integrations**: Add new directories under `core/` for new capabilities
+- **New Page Objects**: Create new page classes extending BasePage
+- **New Test Suites**: Add new directories under the appropriate test type
+- **New Environments**: Define additional environments in pyproject.toml
+- **New Integrations**: Add new directories under core/ for new capabilities
 
 ## Future Development
 
@@ -263,11 +392,36 @@ The framework is designed for extension:
 - Visual testing enhancements
 - Documentation generation with MkDocs
 
-## Contributing
+## Troubleshooting
 
+### Common Issues
+
+1. **ChromeDriver Version Mismatch**
+   - Ensure your Chrome browser and ChromeDriver versions are compatible
+   - You can specify a custom ChromeDriver path with the `CHROMEDRIVER_PATH` environment variable
+
+2. **Headless Mode Issues**
+   - For Docker or CI environments, the framework automatically uses headless mode
+   - Set `DOCKER_ENV=true` to force headless mode
+
+3. **Report Generation Failures**
+   - Ensure the `reports` directory and its subdirectories exist
+   - Check file permissions if reports aren't being saved
+
+4. **Allure Command Not Found**
+   - Install Allure command-line tools:
+     - macOS: `brew install allure`
+     - npm: `npm install -g allure-commandline`
+
+5. **Pytest Plugin Conflicts**
+   - If you experience empty Allure reports, there might be a conflict between the custom Testopus plugin and Allure plugin
+   - Use the new direct Allure integration commands (e.g., `hatch run test:allure-report`) which bypass the custom plugin
+   - The framework includes fixtures in `fixtures/allure.py` that provide the same functionality without conflicts
+
+For more detailed documentation, see the docs directory or contact the project maintainers.
+
+## Contributing
 Contributions are welcome! Please feel free to submit a Pull Request.
 
-## P.S. 
-
-The plan is to take neutral applications available in different countries, let's say the homepage of IKEA store or Wikipedia.
-Which will serve as a reference for creating their own test cases.
+## P.S.
+The plan is to take neutral applications available in different countries, let's say the homepage of IKEA store or Wikipedia. Which will serve as a reference for creating their own test cases.
