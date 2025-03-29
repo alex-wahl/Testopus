@@ -35,13 +35,15 @@ permissions:
   checks: write
   pull-requests: write
 
+# Allow only one concurrent deployment
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
 jobs:
-  # Build job
+  # Test job
   test:
     runs-on: ubuntu-latest
-    # Build job uses a specific ID that is used by the deployment job
-    outputs:
-      page-url: ${{ steps.deployment.outputs.page_url }}
     
     steps:
       - uses: actions/checkout@v4
@@ -179,36 +181,15 @@ jobs:
         with:
           files: reports/junit/report*.xml
           check_name: Test Results
-      
-      # Configure GitHub Pages
-      - name: Setup Pages
-        if: always() && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
-        uses: actions/configure-pages@v4
-        with:
-          enablement: true
-      
-      # Upload GitHub Pages artifact
+          
+      # Upload artifact for deployment job
       - name: Upload GitHub Pages artifact
-        if: always() && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+        if: always()
         uses: actions/upload-pages-artifact@v3
         with:
-          path: 'reports/allure-report'
+          path: reports/allure-report
           retention-days: 30
       
-      # Deploy to GitHub Pages
-      - name: Deploy to GitHub Pages
-        if: always() && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
-        id: deployment
-        uses: actions/deploy-pages@v3
-        with:
-          token: ${{ github.token }}
-      
-      # Publish Allure Report URL
-      - name: Show Allure Report URL
-        if: always() && steps.deployment.outputs.page_url != ''
-        run: |
-          echo "::notice title=Allure Report::Allure report has been deployed to ${{ steps.deployment.outputs.page_url }}"
-
       # Comment on PR with link to reports
       - name: Comment PR with Report Links
         if: always() && github.event_name == 'pull_request'
@@ -217,22 +198,12 @@ jobs:
           script: |
             const artifactUrl = `${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}`;
             let pagesUrl = `https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}`;
-            if ('${{ steps.deployment.outputs.page_url }}' !== '') {
-              pagesUrl = '${{ steps.deployment.outputs.page_url }}';
-            }
             
-            let reportStatus = '⚠️ Check Details';
-            let availabilityNote = '(Will be available after merge to main)';
-            if ('${{ steps.deployment.outcome }}' === 'success') {
-              reportStatus = '✅ Success';
-              availabilityNote = '';
-            }
-            
-            const comment = `### Test Results: ${reportStatus}
+            const comment = `### Test Results
             
             #### Report Links:
             - [Download Test Reports](${artifactUrl})
-            - [View Allure Report](${pagesUrl}) ${availabilityNote}
+            - [View Allure Report](${pagesUrl}) (available after merge to main)
             
             *Tests run by GitHub Actions workflow*`;
             
@@ -241,4 +212,18 @@ jobs:
               owner: context.repo.owner,
               repo: context.repo.repo,
               body: comment
-            }); 
+            });
+  
+  # Deployment job
+  deploy:
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+    needs: test
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v3
