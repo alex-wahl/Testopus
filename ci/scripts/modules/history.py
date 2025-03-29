@@ -111,38 +111,34 @@ def initialize_history_files(directory: str) -> None:
             logger.info(f"Created empty history file: {file_name}")
 
 
-def generate_basic_history_data(report_dir: str, history_dir: str) -> bool:
-    """Generate basic history data from current test results if no history exists.
-
-    This ensures that even for the first run, the history tab shows some minimal data.
+def has_existing_history(history_dir: str) -> bool:
+    """Check if valid history data already exists.
 
     Args:
-        report_dir: Path to the Allure report directory
         history_dir: Path to the history directory
 
     Returns:
-        bool: True if history was generated, False otherwise
+        bool: True if valid history data exists, False otherwise
     """
-    logger.info("Generating basic history data from current run")
-
-    # Ensure history directory exists
-    ensure_dir_exists(history_dir)
-
-    # Check if we already have history data
     history_json_path = os.path.join(history_dir, "history.json")
-    if os.path.exists(history_json_path) and os.path.getsize(history_json_path) > 5:
-        # We already have history data
-        logger.info("Existing history data found, skipping basic generation")
-        return False
+    return os.path.exists(history_json_path) and os.path.getsize(history_json_path) > 5
 
-    # Find all test result JSON files to generate history from
-    test_results = {}
-    results_dir = os.path.join(os.path.dirname(report_dir), "allure-results")
 
-    # If no results directory, we can't generate history
+def find_test_results(results_dir: str) -> Dict[str, Dict[str, Any]]:
+    """Find and load test result files.
+
+    Args:
+        results_dir: Path to the results directory
+
+    Returns:
+        Dict[str, Dict[str, Any]]: Dictionary of test results keyed by UUID
+    """
+    test_results: Dict[str, Dict[str, Any]] = {}
+
+    # If no results directory, we can't find test results
     if not os.path.exists(results_dir):
         logger.warning(f"No results directory found at {results_dir}")
-        return False
+        return test_results
 
     # Look for test-result.json files
     for root, _, files in os.walk(results_dir):
@@ -169,12 +165,49 @@ def generate_basic_history_data(report_dir: str, history_dir: str) -> bool:
                     logger.warning(f"Error processing test result file {file_path}: {str(e)}")
 
     if not test_results:
-        logger.warning("No test results found to generate history from")
-        return False
+        logger.warning("No test results found")
 
-    # Generate history.json
+    return test_results
+
+
+def calculate_status_statistics(test_results: Dict[str, Dict[str, Any]]) -> Dict[str, int]:
+    """Calculate status statistics from test results.
+
+    Args:
+        test_results: Dictionary of test results
+
+    Returns:
+        Dict[str, int]: Dictionary with counts for each status type
+    """
+    total_stats = {"failed": 0, "broken": 0, "skipped": 0, "passed": 0, "unknown": 0, "total": len(test_results)}
+
+    # Count statuses
+    for test_info in test_results.values():
+        status = test_info["status"]
+        if status == "failed":
+            total_stats["failed"] += 1
+        elif status == "broken":
+            total_stats["broken"] += 1
+        elif status == "skipped":
+            total_stats["skipped"] += 1
+        elif status == "passed":
+            total_stats["passed"] += 1
+        else:
+            total_stats["unknown"] += 1
+
+    return total_stats
+
+
+def create_history_data(test_results: Dict[str, Dict[str, Any]]) -> Dict[str, Any]:
+    """Create history data structure for history.json.
+
+    Args:
+        test_results: Dictionary of test results
+
+    Returns:
+        Dict[str, Any]: History data structure
+    """
     history_data = {}
-    # Get current timestamp - can be used for history entries
     timestamp = int(datetime.now().timestamp() * 1000)
 
     for uuid, test_info in test_results.items():
@@ -194,37 +227,37 @@ def generate_basic_history_data(report_dir: str, history_dir: str) -> bool:
                     "status": test_info["status"],
                     "time": test_info["time"],
                     "reportUrl": f"data/test-cases/{uuid}.json",
-                    "timestamp": timestamp,  # Add timestamp to history entry
+                    "timestamp": timestamp,
                 }
             ],
         }
 
-    # Generate trend files
-    total_stats = {"failed": 0, "broken": 0, "skipped": 0, "passed": 0, "unknown": 0, "total": len(test_results)}
+    return history_data
 
-    # Count statuses
-    for test_info in test_results.values():
-        status = test_info["status"]
-        if status == "failed":
-            total_stats["failed"] += 1
-        elif status == "broken":
-            total_stats["broken"] += 1
-        elif status == "skipped":
-            total_stats["skipped"] += 1
-        elif status == "passed":
-            total_stats["passed"] += 1
-        else:
-            total_stats["unknown"] += 1
+
+def create_trend_data(total_stats: Dict[str, int]) -> Dict[str, List[Dict[str, Any]]]:
+    """Create trend data for trend JSON files.
+
+    Args:
+        total_stats: Dictionary with counts for each status type
+
+    Returns:
+        Dict[str, List[Dict[str, Any]]]: Dictionary containing all trend data structures
+    """
+    # Build order for all trends
+    build_order = 1
+    report_url = "index.html"
+    report_name = f"Run #{build_order}"
 
     # History trend
-    history_trend = [{"buildOrder": 1, "reportUrl": "index.html", "reportName": f"Run #{1}", "data": total_stats}]
+    history_trend = [{"buildOrder": build_order, "reportUrl": report_url, "reportName": report_name, "data": total_stats}]
 
     # Categories trend
     categories_trend = [
         {
-            "buildOrder": 1,
-            "reportUrl": "index.html",
-            "reportName": f"Run #{1}",
+            "buildOrder": build_order,
+            "reportUrl": report_url,
+            "reportName": report_name,
             "data": {"categoryA": total_stats["broken"], "categoryB": total_stats["failed"]},
         }
     ]
@@ -232,9 +265,9 @@ def generate_basic_history_data(report_dir: str, history_dir: str) -> bool:
     # Duration trend
     duration_trend = [
         {
-            "buildOrder": 1,
-            "reportUrl": "index.html",
-            "reportName": f"Run #{1}",
+            "buildOrder": build_order,
+            "reportUrl": report_url,
+            "reportName": report_name,
             "data": {"duration": 0},  # We don't have aggregate duration info
         }
     ]
@@ -242,35 +275,95 @@ def generate_basic_history_data(report_dir: str, history_dir: str) -> bool:
     # Retries trend
     retries_trend = [
         {
-            "buildOrder": 1,
-            "reportUrl": "index.html",
-            "reportName": f"Run #{1}",
+            "buildOrder": build_order,
+            "reportUrl": report_url,
+            "reportName": report_name,
             "data": {"retry": 0},  # We don't have retry info
         }
     ]
 
-    # Write files
+    return {
+        "history-trend.json": history_trend,
+        "categories-trend.json": categories_trend,
+        "duration-trend.json": duration_trend,
+        "retries-trend.json": retries_trend,
+    }
+
+
+def write_history_files(history_dir: str, history_data: Dict[str, Any], trend_data: Dict[str, List[Dict[str, Any]]]) -> bool:
+    """Write history data to JSON files.
+
+    Args:
+        history_dir: Path to the history directory
+        history_data: History data structure for history.json
+        trend_data: Dictionary containing all trend data structures
+
+    Returns:
+        bool: True if successful, False otherwise
+    """
     try:
+        # Write history.json
         with open(os.path.join(history_dir, "history.json"), "w") as f:
             json.dump(history_data, f)
 
-        with open(os.path.join(history_dir, "history-trend.json"), "w") as f:
-            json.dump(history_trend, f)
+        # Write all trend files
+        for filename, data in trend_data.items():
+            with open(os.path.join(history_dir, filename), "w") as f:
+                json.dump(data, f)
 
-        with open(os.path.join(history_dir, "categories-trend.json"), "w") as f:
-            json.dump(categories_trend, f)
-
-        with open(os.path.join(history_dir, "duration-trend.json"), "w") as f:
-            json.dump(duration_trend, f)
-
-        with open(os.path.join(history_dir, "retries-trend.json"), "w") as f:
-            json.dump(retries_trend, f)
-
-        logger.info(f"Generated basic history data with {len(test_results)} tests")
         return True
     except Exception as e:
         logger.error(f"Error writing history files: {str(e)}")
         return False
+
+
+def generate_basic_history_data(report_dir: str, history_dir: str) -> bool:
+    """Generate basic history data from current test results if no history exists.
+
+    This ensures that even for the first run, the history tab shows some minimal data.
+    Orchestrates the process of creating history data by calling helper functions.
+
+    Args:
+        report_dir: Path to the Allure report directory
+        history_dir: Path to the history directory
+
+    Returns:
+        bool: True if history was generated, False otherwise
+    """
+    logger.info("Generating basic history data from current run")
+
+    # Ensure history directory exists
+    ensure_dir_exists(history_dir)
+
+    # Check if we already have history data
+    if has_existing_history(history_dir):
+        logger.info("Existing history data found, skipping basic generation")
+        return False
+
+    # Find test results directory and load test data
+    results_dir = os.path.join(os.path.dirname(report_dir), "allure-results")
+    test_results = find_test_results(results_dir)
+
+    if not test_results:
+        logger.warning("No test results found to generate history from")
+        return False
+
+    # Calculate statistics from test results
+    total_stats = calculate_status_statistics(test_results)
+
+    # Create history data structure
+    history_data = create_history_data(test_results)
+
+    # Create trend data structures
+    trend_data = create_trend_data(total_stats)
+
+    # Write all data to files
+    success = write_history_files(history_dir, history_data, trend_data)
+
+    if success:
+        logger.info(f"Generated basic history data with {len(test_results)} tests")
+
+    return success
 
 
 def load_json_from_file(file_path: str, default_empty: Optional[Union[Dict, List]] = None) -> Union[Dict, List]:
