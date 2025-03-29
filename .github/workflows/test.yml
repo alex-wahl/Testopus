@@ -102,13 +102,13 @@ jobs:
       - name: Run tests
         run: |
           if [ "${{ github.event.inputs.test_suite }}" = "ui" ]; then
-            docker compose -f docker/docker-compose.yml run --rm testopus --verbose -vv --alluredir=/app/reports/allure-results --html=/app/reports/html/report.html --self-contained-html /app/tests/ui_tests/web ${{ github.event.inputs.custom_flags }}
+            docker compose -f docker/docker-compose.yml run --rm testopus --verbose -vv --alluredir=/app/reports/allure-results --html=/app/reports/html/report.html --json-report --json-report-file=/app/reports/json/report_ui.json /app/tests/ui_tests/web ${{ github.event.inputs.custom_flags }}
           elif [ "${{ github.event.inputs.test_suite }}" = "api" ]; then
-            docker compose -f docker/docker-compose.yml run --rm testopus --verbose -vv --alluredir=/app/reports/allure-results --html=/app/reports/html/report.html --self-contained-html /app/tests/api_tests ${{ github.event.inputs.custom_flags }}
+            docker compose -f docker/docker-compose.yml run --rm testopus --verbose -vv --alluredir=/app/reports/allure-results --html=/app/reports/html/report.html --json-report --json-report-file=/app/reports/json/report_api.json /app/tests/api_tests ${{ github.event.inputs.custom_flags }}
           elif [ "${{ github.event.inputs.test_suite }}" = "internal" ]; then
-            docker compose -f docker/docker-compose.yml run --rm testopus --verbose -vv --alluredir=/app/reports/allure-results --html=/app/reports/html/report.html --self-contained-html /app/tests/internal_tests ${{ github.event.inputs.custom_flags }}
+            docker compose -f docker/docker-compose.yml run --rm testopus --verbose -vv --alluredir=/app/reports/allure-results --html=/app/reports/html/report.html --json-report --json-report-file=/app/reports/json/report_internal.json /app/tests/internal_tests ${{ github.event.inputs.custom_flags }}
           else
-            docker compose -f docker/docker-compose.yml run --rm testopus --verbose -vv --alluredir=/app/reports/allure-results --html=/app/reports/html/report.html --self-contained-html /app/tests ${{ github.event.inputs.custom_flags }}
+            docker compose -f docker/docker-compose.yml run --rm testopus --verbose -vv --alluredir=/app/reports/allure-results --html=/app/reports/html/report.html --json-report --json-report-file=/app/reports/json/report_all.json /app/tests ${{ github.event.inputs.custom_flags }}
           fi
         env:
           DEBUG_MODE: ${{ github.event.inputs.debug_mode == 'true' }}
@@ -149,34 +149,7 @@ jobs:
           else
             echo "No Allure results found, creating a dummy report"
             mkdir -p reports/allure-report
-            cat > reports/allure-report/index.html << EOL
-            <!DOCTYPE html>
-            <html>
-            <head>
-              <title>Test Report</title>
-              <style>
-                body { font-family: Arial, sans-serif; padding: 20px; line-height: 1.6; }
-                .container { max-width: 800px; margin: 0 auto; padding: 20px; border: 1px solid #ddd; border-radius: 5px; }
-                h1 { color: #333; }
-                .warning { color: #f44336; }
-                .info { color: #2196F3; }
-              </style>
-            </head>
-            <body>
-              <div class="container">
-                <h1>Test Report</h1>
-                <p class="warning">No test results available for this run.</p>
-                <p class="info">Possible reasons:</p>
-                <ul>
-                  <li>No tests were found in the repository</li>
-                  <li>Tests were found but not executed properly</li>
-                  <li>Tests ran but results were not saved to the correct location</li>
-                </ul>
-                <p>Please check the workflow logs for more information.</p>
-              </div>
-            </body>
-            </html>
-            EOL
+            echo '<!DOCTYPE html><html><head><title>Test Report</title><style>body{font-family:Arial,sans-serif;padding:20px;line-height:1.6}.container{max-width:800px;margin:0 auto;padding:20px;border:1px solid #ddd;border-radius:5px}h1{color:#333}.warning{color:#f44336}.info{color:#2196F3}</style></head><body><div class="container"><h1>Test Report</h1><p class="warning">No test results available for this run.</p><p class="info">Possible reasons:</p><ul><li>No tests were found in the repository</li><li>Tests were found but not executed properly</li><li>Tests ran but results were not saved to the correct location</li></ul><p>Please check the workflow logs for more information.</p></div></body></html>' > reports/allure-report/index.html
           fi
       
       # Upload test reports as artifacts
@@ -197,7 +170,7 @@ jobs:
         if: always()
         uses: EnricoMi/publish-unit-test-result-action@v2
         with:
-          files: reports/json/report_*.json
+          files: reports/json/report*.json
           check_name: Test Results
       
       # Configure GitHub Pages
