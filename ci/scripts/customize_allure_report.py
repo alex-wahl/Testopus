@@ -322,60 +322,46 @@ def update_environment_html(report_dir: str, branch: str) -> None:
 
 
 def update_index_html(report_dir: str, branch: str) -> None:
-    """Update index.html with JavaScript to dynamically update branch information.
+    """Update index.html file with JavaScript to display branch information.
     
     Args:
         report_dir: Path to the Allure report directory.
         branch: Branch name to add.
     """
-    index_html = os.path.join(report_dir, "index.html")
-    if not os.path.exists(index_html):
-        logger.warning(f"index.html not found at {index_html}")
-        return
-    
-    # Path to JavaScript files
-    js_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "js")
-    branch_js_path = os.path.join(js_dir, "branch_position.js")
-    
-    if not os.path.exists(branch_js_path):
-        logger.error(f"JavaScript file not found: {branch_js_path}")
+    index_file = os.path.join(report_dir, "index.html")
+    if not os.path.exists(index_file):
+        logger.warning(f"index.html not found at {index_file}")
         return
         
     try:
-        # Load JavaScript from external file
+        # Load branch info JavaScript from external file
+        js_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "js")
+        branch_js_path = os.path.join(js_dir, "branch_info.js")
+        
+        if not os.path.exists(branch_js_path):
+            logger.warning(f"Branch info JavaScript file not found at {branch_js_path}")
+            return
+        
+        # Read the file and replace branch placeholder
         with open(branch_js_path, 'r', encoding='utf-8') as f:
-            branch_script_template = f.read()
+            branch_script = f.read().replace('{{BRANCH_NAME}}', branch)
         
-        # Replace placeholders with actual values
-        branch_script = branch_script_template\
-            .replace('{BRANCH_NAME}', branch)\
-            .replace('{VERSION}', __version__)
-        
-        # Wrap in script tags
-        branch_script = f"<script>\n{branch_script}\n</script>"
-        
-        # Insert into HTML
-        with open(index_html, 'r', encoding='utf-8') as f:
+        # Read the HTML file
+        with open(index_file, 'r', encoding='utf-8') as f:
             content = f.read()
         
-        # Remove any existing branch positioning scripts
-        content = re.sub(
-            r'<script>\s*//\s*(?:Branch|Immediate script to update branch name).*?</script>',
-            '',
-            content,
-            flags=re.DOTALL
-        )
-        
-        # Insert script in the head
-        if '<head>' in content:
-            content = content.replace('<head>', f'<head>\n{branch_script}')
-            with open(index_html, 'w', encoding='utf-8') as f:
+        # Add the script to the head section
+        if '</head>' in content:
+            script_tag = f"<script type=\"text/javascript\">\n{branch_script}\n</script>"
+            content = content.replace('</head>', script_tag + '</head>')
+            
+            with open(index_file, 'w', encoding='utf-8') as f:
                 f.write(content)
-            logger.info(f"Added branch update and positioning script to {index_html}")
+            logger.info(f"Updated index.html with branch info script")
         else:
-            logger.warning(f"Could not find <head> tag in {index_html}")
+            logger.warning("Could not find </head> in index.html")
     except Exception as e:
-        logger.error(f"Error adding branch script to index.html: {str(e)}")
+        logger.error(f"Failed to update index.html: {str(e)}")
 
 
 def fix_html_title_tags(report_dir: str) -> None:
@@ -819,30 +805,99 @@ def preserve_history(report_dir: str) -> None:
         logger.info("History preservation disabled via environment variable")
         return
     
+    # Define key directories
     history_dir = os.path.join(report_dir, 'history')
-    if not os.path.exists(history_dir):
-        logger.warning(f"No history directory found at {history_dir}")
-        return
-    
-    # Create the history directory if it doesn't exist
+    results_dir = os.path.join(os.path.dirname(report_dir), 'allure-results')
     history_storage = os.path.join(os.path.dirname(report_dir), 'allure-history')
-    os.makedirs(history_storage, exist_ok=True)
     
     if DRY_RUN:
-        logger.info(f"DRY-RUN: Would copy history from {history_dir} to {history_storage}")
+        logger.info(f"DRY-RUN: Would manage history between {history_storage} and {history_dir}")
         return
     
-    try:
-        # First remove the destination directory if it exists (shutil.copytree requires destination to not exist)
-        if os.path.exists(history_storage):
-            shutil.rmtree(history_storage)
+    # Create directories if they don't exist
+    os.makedirs(history_storage, exist_ok=True)
+    os.makedirs(history_dir, exist_ok=True)
+    
+    # Ensure history is properly copied to storage
+    if os.path.exists(history_dir) and any(os.listdir(history_dir)):
+        logger.info(f"Copying history from {history_dir} to {history_storage}")
+        try:
+            # Copy each file individually to avoid directory structure issues
+            for history_file in os.listdir(history_dir):
+                src_file = os.path.join(history_dir, history_file)
+                dst_file = os.path.join(history_storage, history_file)
+                
+                if os.path.isfile(src_file):
+                    shutil.copy2(src_file, dst_file)
+                    logger.info(f"Copied {history_file} to history storage")
             
-        # Then copy the directory
-        shutil.copytree(history_dir, history_storage, dirs_exist_ok=True)
+            logger.info(f"Successfully preserved test history to {history_storage}")
+        except Exception as e:
+            logger.error(f"Failed to preserve history: {str(e)}")
+    else:
+        logger.warning(f"No history data found in {history_dir}")
         
-        logger.info(f"Preserved test history to {history_storage}")
+    # Also ensure results directory has history data for next report generation
+    if os.path.exists(results_dir):
+        results_history_dir = os.path.join(results_dir, 'history')
+        os.makedirs(results_history_dir, exist_ok=True)
+        
+        if os.path.exists(history_storage) and any(os.listdir(history_storage)):
+            logger.info(f"Copying history from storage to results directory")
+            try:
+                # Copy each file individually to avoid directory structure issues
+                for history_file in os.listdir(history_storage):
+                    src_file = os.path.join(history_storage, history_file)
+                    dst_file = os.path.join(results_history_dir, history_file)
+                    
+                    if os.path.isfile(src_file):
+                        shutil.copy2(src_file, dst_file)
+                
+                logger.info(f"Successfully copied history to results directory")
+            except Exception as e:
+                logger.error(f"Error copying history to results: {str(e)}")
+
+
+def fix_missing_test_results(report_dir: str) -> None:
+    """Add JavaScript to handle 404 errors when test results are missing.
+    
+    Args:
+        report_dir: Path to the Allure report directory.
+    """
+    index_file = os.path.join(report_dir, "index.html")
+    if not os.path.exists(index_file):
+        logger.warning(f"index.html not found at {index_file}")
+        return
+        
+    try:
+        # Load 404 error handling JavaScript from external file
+        js_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "js")
+        fix_404_js_path = os.path.join(js_dir, "fix_404_errors.js")
+        
+        if not os.path.exists(fix_404_js_path):
+            logger.warning(f"404 error handling JavaScript file not found at {fix_404_js_path}")
+            return
+        
+        # Read the file
+        with open(fix_404_js_path, 'r', encoding='utf-8') as f:
+            fix_404_script = f.read()
+        
+        # Read the HTML file
+        with open(index_file, 'r', encoding='utf-8') as f:
+            content = f.read()
+        
+        # Add the script to the head section
+        if '</head>' in content:
+            script_tag = f"<script type=\"text/javascript\">\n{fix_404_script}\n</script>"
+            content = content.replace('</head>', script_tag + '</head>')
+            
+            with open(index_file, 'w', encoding='utf-8') as f:
+                f.write(content)
+            logger.info(f"Added 404 handling script to index.html")
+        else:
+            logger.warning("Could not find </head> in index.html")
     except Exception as e:
-        logger.error(f"Failed to preserve history: {str(e)}")
+        logger.error(f"Failed to add 404 handling script: {str(e)}")
 
 
 def parse_args():
@@ -869,76 +924,59 @@ def parse_args():
 
 
 def main() -> int:
-    """Entry point for the script."""
-    global DRY_RUN
+    """Main entry point for the script.
     
+    Returns:
+        int: Exit code (0 for success, non-zero for errors)
+    """
+    # Process command line arguments
     args = parse_args()
     
-    # Set dry run mode if specified
+    # Set global dry-run mode
+    global DRY_RUN
     DRY_RUN = args.dry_run
-    if DRY_RUN:
-        logger.info("Running in dry-run mode, no changes will be applied")
     
-    report_dir = args.report_dir
-    create_dummy = args.dummy
-    custom_branch = args.branch
-    preserve_test_history = args.history
+    # Log script version and arguments
+    logger.info(f"Allure Report Customizer v{__version__}")
+    logger.info(f"Arguments: {args}")
     
-    logger.info(f"Processing Allure report in {report_dir}...")
+    # Determine report directory
+    report_dir = args.report_dir or os.environ.get('ALLURE_REPORT_DIR', './reports/allure-report')
+    report_dir = os.path.abspath(report_dir)
+    logger.info(f"Using report directory: {report_dir}")
     
-    # Create dummy report if requested
-    if create_dummy:
-        create_dummy_report(report_dir)
-        logger.info("Dummy report created successfully!")
-        return 0
+    # Ensure the report directory exists
+    if not os.path.exists(report_dir):
+        if args.dummy or os.environ.get('ALLURE_CREATE_DUMMY', '').lower() in ('true', 'yes', '1'):
+            logger.info(f"Report directory does not exist, creating dummy report at {report_dir}")
+            create_dummy_report(report_dir)
+        else:
+            logger.error(f"Report directory does not exist: {report_dir}")
+            return 1
     
-    # Ensure the directory exists
-    if not os.path.isdir(report_dir):
-        logger.error(f"Error: Directory {report_dir} does not exist!")
-        return 1
+    # Create .nojekyll file for GitHub Pages
+    create_nojekyll_file(report_dir)
     
-    # Check if directory is empty
-    if not os.listdir(report_dir):
-        logger.warning(f"Warning: Directory {report_dir} is empty. Creating dummy report.")
-        create_dummy_report(report_dir)
-        return 0
+    # Add branch information
+    add_branch_info(report_dir, args.branch)
     
-    # Apply customizations (in appropriate order to minimize file reads/writes)
-    try:
-        # 0. Check for existing history to use before customization
-        if preserve_test_history:
-            # This first call checks if we need to copy history TO the report
-            preserve_history(report_dir)
-            
-        # 1. Fix the date formats in various files
-        fix_html_title_tags(report_dir)
-        fix_js_date_formats(report_dir)
-        fix_json_timestamps(report_dir)
-        
-        # 2. Remove problematic elements causing loading issues
-        remove_problematic_elements(report_dir)
-        
-        # 3. Add cache control
-        add_cache_control(report_dir)
-        
-        # 4. Add branch info (with custom branch if provided)
-        add_branch_info(report_dir, custom_branch)
-        
-        # 5. Create .nojekyll file
-        create_nojekyll_file(report_dir)
-        
-        # 6. Preserve history after customization
-        if preserve_test_history:
-            # This second call copies history FROM the report to storage
-            preserve_history(report_dir)
-        
-        logger.info("Allure report customization completed successfully!")
-        return 0
-    except Exception as e:
-        logger.error(f"Error customizing Allure report: {e}")
-        import traceback
-        logger.error(traceback.format_exc())
-        return 1
+    # Fix date format
+    fix_html_title_tags(report_dir)
+    fix_js_date_formats(report_dir)
+    fix_json_timestamps(report_dir)
+    
+    # Add custom CSS
+    add_cache_control(report_dir)
+    
+    # Fix missing test results
+    fix_missing_test_results(report_dir)
+    
+    # If history flag is provided, also preserve history
+    if args.history or os.environ.get('ALLURE_PRESERVE_HISTORY', '').lower() in ('true', 'yes', '1'):
+        preserve_history(report_dir)
+    
+    logger.info(f"Customization complete for {report_dir}")
+    return 0
 
 
 if __name__ == "__main__":
