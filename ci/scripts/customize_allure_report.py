@@ -33,8 +33,10 @@ import json
 import time
 import logging
 import subprocess
+import argparse
 from datetime import datetime
 from pathlib import Path
+from typing import Optional, List, Dict, Any, Union
 
 # Set up logging
 logging.basicConfig(
@@ -44,7 +46,7 @@ logging.basicConfig(
 logger = logging.getLogger('allure-customizer')
 
 # Version for reproducibility in CI/CD logs
-__version__ = "1.0.0"
+__version__ = "1.1.0"
 
 # Make script idempotent (safe to run multiple times)
 DRY_RUN = False
@@ -65,10 +67,15 @@ def create_nojekyll_file(report_dir: str) -> None:
     Args:
         report_dir: Path to the Allure report directory.
     """
-    with open(os.path.join(report_dir, ".nojekyll"), "w") as f:
+    if DRY_RUN:
+        logger.info(f"DRY-RUN: Would create .nojekyll file in {report_dir}")
+        return
+        
+    nojekyll_path = os.path.join(report_dir, ".nojekyll")
+    with open(nojekyll_path, "w") as f:
         pass
     
-    logger.info("Created .nojekyll file")
+    logger.info(f"Created .nojekyll file at {nojekyll_path}")
 
 
 def get_branch_name() -> str:
@@ -77,9 +84,13 @@ def get_branch_name() -> str:
     Returns:
         str: Current branch name or a sensible default if not available.
     """
+    # First check for explicit environment variable
+    branch = os.environ.get('ALLURE_BRANCH', '')
+    if branch:
+        logger.info(f"Using branch name from ALLURE_BRANCH: {branch}")
+        return branch
+
     # Try multiple approaches to get the branch name
-    branch = None
-    
     # 1. GitHub Actions environment variables
     branch = os.environ.get('GITHUB_HEAD_REF', '')  # For pull requests
     if not branch:
@@ -92,9 +103,9 @@ def get_branch_name() -> str:
         try:
             # Try to get from git command as fallback
             branch = subprocess.check_output(['git', 'rev-parse', '--abbrev-ref', 'HEAD'], 
-                                          stderr=subprocess.DEVNULL).decode('utf-8').strip()
+                                           stderr=subprocess.DEVNULL).decode('utf-8').strip()
         except (subprocess.SubprocessError, FileNotFoundError):
-            pass
+            logger.warning("Failed to get branch name from git command")
     
     # 3. Look for .git/HEAD file
     if not branch:
@@ -105,8 +116,8 @@ def get_branch_name() -> str:
                     content = f.read().strip()
                     if content.startswith('ref: refs/heads/'):
                         branch = content.replace('ref: refs/heads/', '')
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning(f"Failed to read .git/HEAD: {str(e)}")
     
     # 4. Try CI environment variables from other systems
     if not branch:
@@ -133,6 +144,7 @@ def get_branch_name() -> str:
         else:
             branch = 'main'  # Default to main as a sensible default
     
+    logger.info(f"Detected branch name: {branch}")
     return branch
 
 
@@ -149,62 +161,100 @@ def add_branch_info(report_dir: str, custom_branch: str = None) -> None:
     branch = custom_branch if custom_branch else get_branch_name()
     logger.info(f"Using branch name: {branch}")
     
-    # Read existing environment properties
-    if os.path.exists(env_file):
-        with open(env_file, 'r', encoding='utf-8') as f:
-            lines = f.readlines()
-    else:
-        lines = []
+    if DRY_RUN:
+        logger.info(f"DRY-RUN: Would update environment files with branch={branch}")
+        return
     
-    # Remove any existing Branch property
-    lines = [line for line in lines if not line.startswith('Branch=')]
+    # Update environment.properties
+    update_environment_properties(env_file, branch)
     
-    # Add branch at the beginning of the file
-    lines.insert(0, f'Branch={branch}\n')
+    # Update environment.json
+    update_environment_json(report_dir, branch)
     
-    # Write updated environment properties
-    with open(env_file, 'w', encoding='utf-8') as f:
-        f.writelines(lines)
-    logger.info(f"Updated environment.properties with branch={branch}")
+    # Update HTML files
+    update_environment_html(report_dir, branch)
     
-    # Also try to update the environment.json file which is used by the Allure SPA
+    # Update index.html with JavaScript
+    update_index_html(report_dir, branch)
+    
+    logger.info(f"Added branch information: {branch} at the top of the environment table")
+
+
+def update_environment_properties(env_file: str, branch: str) -> None:
+    """Update environment.properties file with branch information.
+    
+    Args:
+        env_file: Path to environment.properties file.
+        branch: Branch name to add.
+    """
+    try:
+        # Read existing environment properties
+        if os.path.exists(env_file):
+            with open(env_file, 'r', encoding='utf-8') as f:
+                lines = f.readlines()
+        else:
+            lines = []
+            logger.warning(f"Creating new environment.properties file at {env_file}")
+        
+        # Remove any existing Branch property
+        lines = [line for line in lines if not line.startswith('Branch=')]
+        
+        # Always add branch at the beginning of the file
+        lines.insert(0, f'Branch={branch}\n')
+        
+        # Write updated environment properties
+        with open(env_file, 'w', encoding='utf-8') as f:
+            f.writelines(lines)
+        logger.info(f"Updated environment.properties with branch={branch}")
+    except Exception as e:
+        logger.error(f"Failed to update environment.properties: {str(e)}")
+
+
+def update_environment_json(report_dir: str, branch: str) -> None:
+    """Update environment.json file with branch information.
+    
+    Args:
+        report_dir: Path to the Allure report directory.
+        branch: Branch name to add.
+    """
     env_json_file = os.path.join(report_dir, "widgets", "environment.json")
-    if os.path.exists(env_json_file):
-        try:
-            with open(env_json_file, 'r', encoding='utf-8') as f:
-                env_data = json.load(f)
-            
-            # For the Allure report in the screenshot, the structure is a list of objects with name/values
-            if isinstance(env_data, list):
-                # Find if Branch already exists
-                branch_found = False
-                for item in env_data:
-                    if isinstance(item, dict) and item.get("name") == "Branch":
-                        item["values"] = [branch]
-                        branch_found = True
-                        logger.info(f"Updated existing Branch entry in environment.json")
-                        break
-                
-                # If not found, add it at the beginning
-                if not branch_found:
-                    env_data.insert(0, {
-                        "name": "Branch",
-                        "values": [branch]
-                    })
-                    logger.info(f"Added new Branch entry to environment.json")
-                
-                # Write back the updated data
-                with open(env_json_file, 'w', encoding='utf-8') as f:
-                    json.dump(env_data, f, indent=2)
-                logger.info(f"Saved updated environment.json")
-            else:
-                logger.warning(f"environment.json has unexpected non-list structure")
-        except Exception as e:
-            logger.warning(f"Error updating environment.json: {e}")
-    else:
+    if not os.path.exists(env_json_file):
         logger.warning(f"environment.json not found at {env_json_file}")
+        return
+        
+    try:
+        with open(env_json_file, 'r', encoding='utf-8') as f:
+            env_data = json.load(f)
+        
+        # For the Allure report in the screenshot, the structure is a list of objects with name/values
+        if isinstance(env_data, list):
+            # ALWAYS remove any existing Branch entries
+            env_data = [item for item in env_data if not (isinstance(item, dict) and item.get("name") == "Branch")]
+            
+            # ALWAYS add Branch at position 0
+            env_data.insert(0, {
+                "name": "Branch",
+                "values": [branch]
+            })
+            logger.info(f"Added Branch entry at the top of environment.json")
+            
+            # Write back the updated data
+            with open(env_json_file, 'w', encoding='utf-8') as f:
+                json.dump(env_data, f, indent=2)
+            logger.info(f"Saved updated environment.json")
+        else:
+            logger.warning(f"environment.json has unexpected non-list structure")
+    except Exception as e:
+        logger.error(f"Error updating environment.json: {str(e)}")
+
+
+def update_environment_html(report_dir: str, branch: str) -> None:
+    """Update HTML files with branch information.
     
-    # Direct approach: modify the HTML directly
+    Args:
+        report_dir: Path to the Allure report directory.
+        branch: Branch name to add.
+    """
     html_files = glob.glob(os.path.join(report_dir, "**", "*.html"), recursive=True)
     env_table_modified = False
     
@@ -213,171 +263,115 @@ def add_branch_info(report_dir: str, custom_branch: str = None) -> None:
             with open(html_file, 'r', encoding='utf-8') as f:
                 content = f.read()
             
-            # Try direct string replacement for the branch row
-            unknown_branch_pattern = r'<tr>\s*<td>\s*Branch\s*</td>\s*<td>unknown</td>\s*</tr>'
-            if re.search(unknown_branch_pattern, content):
-                new_content = re.sub(
-                    unknown_branch_pattern,
-                    f'<tr><td>Branch</td><td>{branch}</td></tr>',
-                    content
-                )
+            modified = False
+            
+            # Find any existing Branch row and remove it
+            branch_pattern = r'<tr>\s*<td>\s*Branch\s*</td>\s*<td>[^<]*</td>\s*</tr>'
+            clean_content = re.sub(branch_pattern, '', content)
+            
+            # Different approaches to fix the table formatting
+            
+            # 1. Approach for tables with existing rows
+            if '<table' in clean_content and '<tr>' in clean_content:
+                # Find the first <tr> tag after a <table>
+                table_first_row_pattern = r'(<table[^>]*>(?:\s*(?:<colgroup>.*?</colgroup>)?\s*<tbody>?\s*)?)((?:<tr>))'
                 
-                if new_content != content:
-                    with open(html_file, 'w', encoding='utf-8') as f:
-                        f.write(new_content)
-                    env_table_modified = True
-                    logger.info(f"Updated branch value in {html_file}")
-        except Exception as e:
-            logger.warning(f"Error modifying branch in HTML: {e}")
-    
-    # Create a more aggressive script for the index.html that will dynamically fix SPA content
-    index_html = os.path.join(report_dir, "index.html")
-    if os.path.exists(index_html):
-        try:
-            with open(index_html, 'r', encoding='utf-8') as f:
-                content = f.read()
+                if re.search(table_first_row_pattern, clean_content, re.DOTALL):
+                    new_content = re.sub(
+                        table_first_row_pattern,
+                        f'\\1<tr><td>Branch</td><td>{branch}</td></tr>\\n\\2',
+                        clean_content,
+                        count=1,  # Only replace the first instance
+                        flags=re.DOTALL
+                    )
+                    modified = True
             
-            # Add an immediate script block to update the branch
-            branch_script = f"""
-<script>
-// Immediate script to update branch name
-(function() {{
-    // Store the actual branch value
-    const branchValue = '{branch}';
-    
-    function setBranchName() {{
-        console.log('Running branch name update');
-        
-        // Try to directly find and update branch in the DOM
-        // 1. Check static tables first
-        const envTables = document.querySelectorAll('table');
-        let branchUpdated = false;
-        
-        envTables.forEach(table => {{
-            // Find all rows with 'Branch' label
-            const rows = Array.from(table.querySelectorAll('tr')).filter(row => {{
-                const cells = row.querySelectorAll('td');
-                return cells.length >= 2 && cells[0].textContent.trim() === 'Branch';
-            }});
+            # If the first approach didn't work, try a simpler one
+            if not modified and '<tr>' in clean_content:
+                # Find the first <tr> tag anywhere
+                first_tr_pattern = r'(<tr>)'
+                
+                if re.search(first_tr_pattern, clean_content):
+                    new_content = re.sub(
+                        first_tr_pattern,
+                        f'<tr><td>Branch</td><td>{branch}</td></tr>\\n\\1',
+                        clean_content,
+                        count=1,  # Only replace the first instance
+                    )
+                    modified = True
             
-            // For each Branch row:
-            rows.forEach(row => {{
-                const cells = row.querySelectorAll('td');
-                // Update value and move to top if needed
-                if (cells[1].textContent.trim() === 'unknown' || cells[1].textContent.trim() !== branchValue) {{
-                    cells[1].textContent = branchValue;
-                    branchUpdated = true;
+            if modified:
+                # Verify the HTML isn't malformed
+                if not ('<tr><td>Branch</td><td>' in new_content and '</tr>' in new_content):
+                    logger.warning(f"Skipping HTML update for {html_file} - could result in malformed HTML")
+                    continue
                     
-                    // Try to move to top of table
-                    const firstRow = table.querySelector('tr');
-                    if (firstRow && firstRow !== row) {{
-                        table.insertBefore(row, firstRow);
-                    }}
-                }}
-            }});
-            
-            // If no Branch row exists, create one at the top
-            if (rows.length === 0 && table.querySelectorAll('tr').length > 0) {{
-                const firstRow = table.querySelector('tr');
-                const newRow = document.createElement('tr');
-                newRow.innerHTML = '<td>Branch</td><td>' + branchValue + '</td>';
-                table.insertBefore(newRow, firstRow);
-                branchUpdated = true;
-            }}
-        }});
-        
-        if (branchUpdated) {{
-            console.log('Updated branch name to: ' + branchValue);
-        }}
-        
-        // 2. Also try to update any JSON/API data in the app
-        // This is a more aggressive approach that works with SPAs
-        try {{
-            // If there's any app data/state in global variables
-            if (window.allureData || window.allure || window.app) {{
-                const appData = window.allureData || window.allure || window.app;
-                
-                // Look for environment data in common locations
-                const findAndUpdateEnv = (obj) => {{
-                    if (!obj) return;
-                    
-                    if (Array.isArray(obj)) {{
-                        // Traverse array
-                        obj.forEach(item => findAndUpdateEnv(item));
-                    }} else if (typeof obj === 'object') {{
-                        // Check if this is environment data
-                        if (obj.name === 'Branch') {{
-                            obj.values = [branchValue];
-                        }}
-                        
-                        // Also check for environment list
-                        if (obj.environment && Array.isArray(obj.environment)) {{
-                            let branchFound = false;
-                            for (const envItem of obj.environment) {{
-                                if (envItem.name === 'Branch') {{
-                                    envItem.values = [branchValue];
-                                    branchFound = true;
-                                }}
-                            }}
-                            
-                            if (!branchFound) {{
-                                obj.environment.unshift({{
-                                    name: 'Branch',
-                                    values: [branchValue]
-                                }});
-                            }}
-                        }}
-                        
-                        // Recursively check all properties
-                        Object.values(obj).forEach(val => findAndUpdateEnv(val));
-                    }}
-                }};
-                
-                findAndUpdateEnv(appData);
-                console.log('Attempted to update branch in app data');
-            }}
-        }} catch (e) {{
-            console.log('Error updating app data:', e);
-        }}
-    }}
-    
-    // Run immediately 
-    setTimeout(setBranchName, 0);
-    
-    // Also run after DOM content loaded
-    document.addEventListener('DOMContentLoaded', function() {{
-        setBranchName();
-        // Run several times to catch async renders
-        setTimeout(setBranchName, 500);
-        setTimeout(setBranchName, 1500);
-        setTimeout(setBranchName, 3000);
-    }});
-    
-    // Also observe DOM changes for SPA navigation
-    const observer = new MutationObserver(function(mutations) {{
-        setBranchName();
-    }});
-    
-    // Start observing once DOM is loaded
-    document.addEventListener('DOMContentLoaded', function() {{
-        observer.observe(document.body, {{
-            childList: true,
-            subtree: true
-        }});
-    }});
-}})();
-</script>
-"""
-            # Insert right after the <head> tag
-            if '<head>' in content:
-                new_content = content.replace('<head>', f'<head>\n{branch_script}')
-                with open(index_html, 'w', encoding='utf-8') as f:
+                with open(html_file, 'w', encoding='utf-8') as f:
                     f.write(new_content)
-                logger.info(f"Added immediate branch update script to {index_html}")
+                env_table_modified = True
+                logger.info(f"Updated branch position in {html_file}")
         except Exception as e:
-            logger.warning(f"Error adding branch script to index.html: {e}")
+            logger.error(f"Error modifying branch in HTML {html_file}: {str(e)}")
     
-    logger.info(f"Added branch information: {branch}")
+    if not env_table_modified:
+        logger.warning("No HTML files were modified to include branch information")
+
+
+def update_index_html(report_dir: str, branch: str) -> None:
+    """Update index.html with JavaScript to dynamically update branch information.
+    
+    Args:
+        report_dir: Path to the Allure report directory.
+        branch: Branch name to add.
+    """
+    index_html = os.path.join(report_dir, "index.html")
+    if not os.path.exists(index_html):
+        logger.warning(f"index.html not found at {index_html}")
+        return
+    
+    # Path to JavaScript files
+    js_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "js")
+    branch_js_path = os.path.join(js_dir, "branch_position.js")
+    
+    if not os.path.exists(branch_js_path):
+        logger.error(f"JavaScript file not found: {branch_js_path}")
+        return
+        
+    try:
+        # Load JavaScript from external file
+        with open(branch_js_path, 'r', encoding='utf-8') as f:
+            branch_script_template = f.read()
+        
+        # Replace placeholders with actual values
+        branch_script = branch_script_template\
+            .replace('{BRANCH_NAME}', branch)\
+            .replace('{VERSION}', __version__)
+        
+        # Wrap in script tags
+        branch_script = f"<script>\n{branch_script}\n</script>"
+        
+        # Insert into HTML
+        with open(index_html, 'r', encoding='utf-8') as f:
+            content = f.read()
+        
+        # Remove any existing branch positioning scripts
+        content = re.sub(
+            r'<script>\s*//\s*(?:Branch|Immediate script to update branch name).*?</script>',
+            '',
+            content,
+            flags=re.DOTALL
+        )
+        
+        # Insert script in the head
+        if '<head>' in content:
+            content = content.replace('<head>', f'<head>\n{branch_script}')
+            with open(index_html, 'w', encoding='utf-8') as f:
+                f.write(content)
+            logger.info(f"Added branch update and positioning script to {index_html}")
+        else:
+            logger.warning(f"Could not find <head> tag in {index_html}")
+    except Exception as e:
+        logger.error(f"Error adding branch script to index.html: {str(e)}")
 
 
 def fix_html_title_tags(report_dir: str) -> None:
@@ -391,7 +385,13 @@ def fix_html_title_tags(report_dir: str) -> None:
     # Get branch name for the script
     branch = get_branch_name()
     
+    if DRY_RUN:
+        logger.info(f"DRY-RUN: Would update HTML title tags with date {today}")
+        return
+    
     html_files = glob.glob(os.path.join(report_dir, "**", "*.html"), recursive=True)
+    updated_count = 0
+    
     for html_file in html_files:
         try:
             with open(html_file, 'r', encoding='utf-8') as f:
@@ -442,121 +442,47 @@ def fix_html_title_tags(report_dir: str) -> None:
                 new_content
             )
             
-            # Also try directly matching the example in the screenshot (3/29/2025)
-            exact_pattern = r'(ALLURE REPORT )3/29/2025'
-            if 'ALLURE REPORT 3/29/2025' in new_content:
-                new_content = new_content.replace('ALLURE REPORT 3/29/2025', f'ALLURE REPORT 29-03-2025')
-            
-            # Inject a direct DOM manipulation script for SPA interfaces like the one in the screenshot
-            # This will run on page load and fix dynamic content
+            # Inject JavaScript for SPA interfaces like the one in the screenshot
             if html_file.endswith('index.html'):
                 logger.info(f"Processing index.html, injecting dynamic content fix script")
                 
-                # Create a script to fix dates in the dynamic content - use raw string to avoid escape issues
-                date_fix_script = fr"""
-<script>
-// Script to fix date formats in the Allure Report UI
-document.addEventListener('DOMContentLoaded', function() {{
-  // Run immediately and after content might have loaded
-  fixAllureDates();
-  setTimeout(fixAllureDates, 500);
-  setTimeout(fixAllureDates, 1500);
-  setTimeout(fixAllureDates, 3000);
-  
-  // Also set up a mutation observer to catch dynamic content
-  const observer = new MutationObserver(function(mutations) {{
-    fixAllureDates();
-  }});
-  
-  // Start observing the document body for DOM changes
-  observer.observe(document.body, {{
-    childList: true,
-    subtree: true
-  }});
-  
-  function fixAllureDates() {{
-    // Convert any MM/DD/YYYY to DD-MM-YYYY in the document
-    const datePattern = /(ALLURE REPORT |Allure Report )(\d{{1,2}})\/(\d{{1,2}})\/(\d{{4}})/gi;
-    
-    // Process all text nodes in the document
-    const textNodes = [];
-    const walker = document.createTreeWalker(
-      document.body,
-      NodeFilter.SHOW_TEXT,
-      null,
-      false
-    );
-    
-    let node;
-    while (node = walker.nextNode()) {{
-      if (node.nodeValue.match(datePattern)) {{
-        node.nodeValue = node.nodeValue.replace(datePattern, function(match, prefix, month, day, year) {{
-          return prefix + day + '-' + month + '-' + year;
-        }});
-      }}
-    }}
-    
-    // Also check specific DOM elements that may contain the date
-    const headerElement = document.querySelector('.header, [class*="header"], [class*="title"]');
-    if (headerElement && headerElement.innerText) {{
-      if (headerElement.innerText.match(datePattern)) {{
-        headerElement.innerText = headerElement.innerText.replace(datePattern, function(match, prefix, month, day, year) {{
-          return prefix + day + '-' + month + '-' + year;
-        }});
-      }}
-    }}
-    
-    // Look for specific elements in the Allure UI that might contain the date
-    document.querySelectorAll('.app__header, .header').forEach(function(el) {{
-      if (el.innerText && el.innerText.match(datePattern)) {{
-        el.innerText = el.innerText.replace(datePattern, function(match, prefix, month, day, year) {{
-          return prefix + day + '-' + month + '-' + year;
-        }});
-      }}
-    }});
-    
-    // Also add branch name to environment if not present and move it to the top
-    const envSection = document.querySelector('.environment, [class*="environment"]');
-    if (envSection) {{
-      // First, find the table
-      const table = envSection.querySelector('table');
-      if (table) {{
-        // Check if Branch row already exists, remove it if it does
-        const branchRows = Array.from(table.querySelectorAll('tr')).filter(row => 
-          row.cells && row.cells[0] && row.cells[0].textContent === 'Branch'
-        );
-        
-        branchRows.forEach(row => row.remove());
-        
-        // Create new Branch row
-        const branchValue = '{branch}';  // Use the actual branch name from Python
-        const newRow = document.createElement('tr');
-        newRow.innerHTML = '<td>Branch</td><td>' + branchValue + '</td>';
-        
-        // Insert at the beginning of the table
-        if (table.rows.length > 0) {{
-          table.insertBefore(newRow, table.rows[0]);
-        }} else {{
-          table.appendChild(newRow);
-        }}
-      }}
-    }}
-  }}
-}});
-</script>
-"""
-                # Add the script just before the closing body tag
-                if '</body>' in new_content:
-                    new_content = new_content.replace('</body>', date_fix_script + '</body>')
-                    logger.info("Injected date format fixing script into index.html")
+                # Load date formatter JavaScript from external file
+                js_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "js")
+                date_js_path = os.path.join(js_dir, "date_formatter.js")
+                
+                if os.path.exists(date_js_path):
+                    # Remove any existing date formatting scripts
+                    new_content = re.sub(
+                        r'<script>\s*//\s*(?:Date format standardization|Script to fix date formats).*?</script>',
+                        '',
+                        new_content,
+                        flags=re.DOTALL
+                    )
+                    
+                    with open(date_js_path, 'r', encoding='utf-8') as f:
+                        date_script_template = f.read()
+                    
+                    # Replace placeholder with actual version
+                    date_script = date_script_template.replace('{VERSION}', __version__)
+                    
+                    # Wrap in script tags
+                    date_fix_script = f"\n<script>\n{date_script}\n</script>\n"
+                    
+                    # Add the script just before the closing body tag
+                    if '</body>' in new_content:
+                        new_content = new_content.replace('</body>', date_fix_script + '</body>')
+                        logger.info("Injected date format fixing script into index.html")
+                else:
+                    logger.warning(f"Date formatter JavaScript not found: {date_js_path}")
             
             if new_content != content:
                 with open(html_file, 'w', encoding='utf-8') as f:
                     f.write(new_content)
+                updated_count += 1
         except Exception as e:
-            logger.warning(f"Error fixing title in {html_file}: {e}")
+            logger.error(f"Error fixing title in {html_file}: {str(e)}")
     
-    logger.info("Fixed date format in HTML title tags")
+    logger.info(f"Fixed date format in {updated_count} HTML files")
 
 
 def fix_js_date_formats(report_dir: str) -> None:
@@ -608,80 +534,59 @@ def fix_js_date_formats(report_dir: str) -> None:
             
             # Special case for app.js - this is where the main UI component renders
             if os.path.basename(js_file) == 'app.js':
-                # Look for any date format in arrays or objects
-                date_format_patterns = [
-                    r'(\d{1,2})/(\d{1,2})/(\d{4})',
-                    r'(\d{1,2})-(\d{1,2})-(\d{4})'
-                ]
+                logger.info(f"Processing app.js, using dynamic date formatter script from js/date_formatter.js")
                 
-                for pattern in date_format_patterns:
-                    date_matches = re.finditer(pattern, content)
-                    for match in date_matches:
-                        # Check if this looks like a date in a UI component
-                        start_pos = max(0, match.start() - 30)
-                        end_pos = min(len(content), match.end() + 30)
-                        context = content[start_pos:end_pos]
+                # Load date formatter JavaScript from external file
+                js_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "js")
+                inline_date_js_path = os.path.join(js_dir, "inline_date_formatter.js")
+                
+                if not os.path.exists(inline_date_js_path):
+                    logger.warning(f"Inline date formatter JavaScript not found at {inline_date_js_path}, creating it...")
+                    os.makedirs(js_dir, exist_ok=True)
+                    
+                    # Get the template file path
+                    template_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 
+                                               "templates", "inline_date_formatter.js.template")
+                    
+                    # Check if template exists
+                    if os.path.exists(template_path):
+                        # Copy from template
+                        with open(template_path, 'r', encoding='utf-8') as src, \
+                             open(inline_date_js_path, 'w', encoding='utf-8') as dst:
+                            dst.write(src.read())
+                        logger.info(f"Created inline date formatter JS from template at {inline_date_js_path}")
+                    else:
+                        logger.warning(f"Template file not found at {template_path}, creating a basic version...")
+                        # Create the template directory if it doesn't exist
+                        template_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "templates")
+                        os.makedirs(template_dir, exist_ok=True)
                         
-                        # If it mentions allure, report, title, etc. it's likely our target
-                        if re.search(r'allure|report|title', context, re.IGNORECASE):
-                            month, day, year = match.groups()
-                            replacement = f"{day}-{month}-{year}"
-                            content = content.replace(match.group(0), replacement)
-                            modified = True
-                            logger.info(f"Fixed date format in app.js: {match.group(0)} -> {replacement}")
+                        # Copy from existing file if it exists
+                        if os.path.exists("ci/scripts/js/inline_date_formatter.js"):
+                            with open("ci/scripts/js/inline_date_formatter.js", 'r', encoding='utf-8') as src, \
+                                 open(template_path, 'w', encoding='utf-8') as dst:
+                                dst.write(src.read())
+                            logger.info(f"Created template from existing JS file at {template_path}")
+                            
+                            # Also copy to destination
+                            with open("ci/scripts/js/inline_date_formatter.js", 'r', encoding='utf-8') as src, \
+                                 open(inline_date_js_path, 'w', encoding='utf-8') as dst:
+                                dst.write(src.read())
+                        else:
+                            logger.error(f"Could not find any source for inline date formatter JS")
+                            # Don't proceed with this part if we can't get the script
+                            continue
                 
-                # Also inject JS code to ensure proper date format rendering
-                if 'DOMContentLoaded' in content:
-                    # Add script to fix any dynamically rendered dates
-                    date_fix_script = """
-// Fix date formats to DD-MM-YYYY
-document.addEventListener('DOMContentLoaded', function() {
-  // Initial fix
-  fixDateFormats();
-  
-  // Also try after dynamic content loads
-  setTimeout(fixDateFormats, 1000);
-  setTimeout(fixDateFormats, 2000);
-  
-  function fixDateFormats() {
-    // Find all text nodes in the document
-    const walker = document.createTreeWalker(
-      document.body, 
-      NodeFilter.SHOW_TEXT,
-      null,
-      false
-    );
-    
-    const dateRegex = /(ALLURE\\s+REPORT\\s+)(\\d{1,2})\\/(\\d{1,2})\\/(\\d{4})/i;
-    let node;
-    
-    while(node = walker.nextNode()) {
-      const matches = node.nodeValue.match(dateRegex);
-      if (matches) {
-        const [fullMatch, prefix, month, day, year] = matches;
-        node.nodeValue = node.nodeValue.replace(
-          fullMatch,
-          `${prefix}${day}-${month}-${year}`
-        );
-      }
-    }
-    
-    // Also look for dates in the header
-    const headerEls = document.querySelectorAll('header, .header, h1, h2, h3, [class*="header"]');
-    headerEls.forEach(el => {
-      if (el.innerText && dateRegex.test(el.innerText)) {
-        el.innerText = el.innerText.replace(dateRegex, `$1$3-$2-$4`);
-      }
-    });
-  }
-});
-"""
-                    # Inject our script at the end, before the closing script tag
-                    if '</script>' in content:
-                        parts = content.rsplit('</script>', 1)
-                        content = parts[0] + date_fix_script + '</script>' + parts[1]
-                        modified = True
-                        logger.info("Injected date format fixing script into app.js")
+                # Read the script from the external file
+                with open(inline_date_js_path, 'r', encoding='utf-8') as f:
+                    inline_date_script = f.read()
+                
+                # Inject our script at the end, before the closing script tag
+                if '</script>' in content:
+                    parts = content.rsplit('</script>', 1)
+                    content = parts[0] + inline_date_script + '</script>' + parts[1]
+                    modified = True
+                    logger.info("Injected date format fixing script into app.js")
             
             if modified:
                 with open(js_file, 'w', encoding='utf-8') as f:
@@ -738,6 +643,26 @@ def add_cache_control(report_dir: str) -> None:
     with open(os.path.join(report_dir, "_headers"), "w") as f:
         f.write(headers_content)
     
+    # Load cache headers template
+    cache_template_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 
+                                      "templates", "cache_headers.html")
+    
+    if not os.path.exists(cache_template_path):
+        logger.warning(f"Cache headers template not found at {cache_template_path}, creating it...")
+        template_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "templates")
+        os.makedirs(template_dir, exist_ok=True)
+        
+        # Create cache headers template
+        with open(cache_template_path, 'w', encoding='utf-8') as f:
+            f.write("""<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">""")
+        logger.info(f"Created cache headers template at {cache_template_path}")
+    
+    # Read the cache headers template
+    with open(cache_template_path, 'r', encoding='utf-8') as f:
+        cache_headers = f.read()
+    
     # Add cache control meta tags to HTML files
     html_files = glob.glob(os.path.join(report_dir, "**", "*.html"), recursive=True)
     fixed_count = 0
@@ -749,7 +674,7 @@ def add_cache_control(report_dir: str) -> None:
             
             # Check if cache meta tags already exist
             if '<meta http-equiv="Cache-Control"' not in content:
-                cache_tags = '<head>\n<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">\n<meta http-equiv="Pragma" content="no-cache">\n<meta http-equiv="Expires" content="0">'
+                cache_tags = f'<head>\n{cache_headers}'
                 new_content = content.replace('<head>', cache_tags)
                 
                 if new_content != content:
@@ -757,7 +682,7 @@ def add_cache_control(report_dir: str) -> None:
                         f.write(new_content)
                     fixed_count += 1
         except Exception as e:
-            logger.warning(f"Error adding cache control to {html_file}: {e}")
+            logger.error(f"Error adding cache control to {html_file}: {str(e)}")
     
     logger.info(f"Added cache control meta tags to {fixed_count} HTML files")
 
@@ -768,6 +693,28 @@ def remove_problematic_elements(report_dir: str) -> None:
     Args:
         report_dir: Path to the Allure report directory.
     """
+    # Load spinner fix CSS template
+    spinner_css_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 
+                                   "templates", "spinner_fix.css")
+    
+    if not os.path.exists(spinner_css_path):
+        logger.warning(f"Spinner CSS template not found at {spinner_css_path}, creating it...")
+        template_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "templates")
+        os.makedirs(template_dir, exist_ok=True)
+        
+        # Create spinner fix CSS template
+        with open(spinner_css_path, 'w', encoding='utf-8') as f:
+            f.write("""/* Ensure spinners don't stay visible indefinitely */
+.spinner, .spinner_centered, [class*="spinner"] {
+  animation-duration: 2s !important;
+  animation-iteration-count: 1 !important;
+}""")
+        logger.info(f"Created spinner CSS template at {spinner_css_path}")
+    
+    # Read the spinner CSS template
+    with open(spinner_css_path, 'r', encoding='utf-8') as f:
+        spinner_css = f.read()
+    
     html_files = glob.glob(os.path.join(report_dir, "**", "*.html"), recursive=True)
     fixed_count = 0
     
@@ -787,15 +734,8 @@ def remove_problematic_elements(report_dir: str) -> None:
             
             # Add CSS to ensure spinners don't stay visible
             if '</head>' in content and 'spinner-fix-styles' not in content:
-                spinner_css = """<style id="spinner-fix-styles">
-/* Ensure spinners don't stay visible indefinitely */
-.spinner, .spinner_centered, [class*="spinner"] {
-  animation-duration: 2s !important;
-  animation-iteration-count: 1 !important;
-}
-</style>
-</head>"""
-                new_content = content.replace('</head>', spinner_css)
+                spinner_style_block = f"<style id=\"spinner-fix-styles\">\n{spinner_css}\n</style>\n</head>"
+                new_content = content.replace('</head>', spinner_style_block)
                 if new_content != content:
                     content = new_content
                     modified = True
@@ -805,7 +745,7 @@ def remove_problematic_elements(report_dir: str) -> None:
                     f.write(content)
                 fixed_count += 1
         except Exception as e:
-            logger.warning(f"Error fixing problematic elements in {html_file}: {e}")
+            logger.error(f"Error fixing problematic elements in {html_file}: {str(e)}")
     
     logger.info(f"Removed problematic elements from {fixed_count} HTML files")
 
@@ -820,41 +760,37 @@ def create_dummy_report(report_dir: str) -> None:
     today = get_current_date_formatted()
     
     # Get the template file path
-    template_path = os.path.join(os.path.dirname(__file__), "templates", "dummy_report.html")
+    template_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "templates", "dummy_report.html")
     
     # Check if template exists
     if not os.path.exists(template_path):
-        logger.warning(f"Template file not found at {template_path}. Using fallback template.")
-        dummy_html = f"""<!DOCTYPE html>
-<html>
-<head>
-    <title>ALLURE REPORT {today}</title>
-    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
-    <meta http-equiv="Pragma" content="no-cache">
-    <meta http-equiv="Expires" content="0">
-    <style>
-        body {{ font-family: Arial, sans-serif; padding: 20px; line-height: 1.6; }}
-        .container {{ max-width: 800px; margin: 0 auto; padding: 20px; border: 1px solid #ddd; border-radius: 5px; }}
-        h1 {{ color: #333; }}
-        .footer {{ margin-top: 30px; color: #666; font-size: 0.9em; }}
-    </style>
-</head>
-<body>
-    <div class="container">
-        <h1>ALLURE REPORT {today}</h1>
-        <p>No test results available for this run.</p>
-        <p>Please check the workflow logs for more information.</p>
-        <div class="footer">Generated on: {datetime.now().strftime("%d-%m-%Y %H:%M:%S")}</div>
-    </div>
-</body>
-</html>"""
-    else:
-        # Read the template file
-        with open(template_path, 'r', encoding='utf-8') as f:
-            template_content = f.read()
+        logger.warning(f"Template file not found at {template_path}, creating a minimal version...")
         
-        # Replace placeholders with values
-        dummy_html = template_content.replace('{today}', today).replace('{timestamp}', datetime.now().strftime("%d-%m-%Y %H:%M:%S"))
+        # Create the template directory if it doesn't exist
+        template_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "templates")
+        os.makedirs(template_dir, exist_ok=True)
+        
+        # Create a minimal fallback template if we can't find the real one
+        with open(template_path, 'w', encoding='utf-8') as f:
+            f.write("""<!DOCTYPE html>
+<html>
+<head><title>ALLURE REPORT {today}</title></head>
+<body>
+  <h1>ALLURE REPORT {today}</h1>
+  <p>No test results available. Template file missing.</p>
+  <p>Generated on: {timestamp}</p>
+</body>
+</html>""")
+        logger.info(f"Created minimal fallback template at {template_path}")
+        logger.warning(f"Please restore the proper template at {template_path} for better formatting")
+    
+    # Read the template file
+    with open(template_path, 'r', encoding='utf-8') as f:
+        template_content = f.read()
+    
+    # Replace placeholders with values
+    dummy_html = template_content.replace('{today}', today).replace(
+        '{timestamp}', datetime.now().strftime("%d-%m-%Y %H:%M:%S"))
     
     # Write the HTML to index.html
     with open(os.path.join(report_dir, "index.html"), "w", encoding='utf-8') as f:
@@ -867,30 +803,41 @@ def create_dummy_report(report_dir: str) -> None:
     logger.info("Created dummy report")
 
 
+def parse_args():
+    """Parse command line arguments.
+    
+    Returns:
+        argparse.Namespace: Parsed arguments.
+    """
+    parser = argparse.ArgumentParser(description='Customize Allure reports for CI/CD')
+    parser.add_argument('report_dir', nargs='?', default=os.environ.get('ALLURE_REPORT_DIR', 'reports/allure-report'),
+                      help='Path to the Allure report directory')
+    parser.add_argument('--dummy', action='store_true', default=os.environ.get('ALLURE_CREATE_DUMMY', 'false').lower() == 'true',
+                      help='Create a dummy report if no results available')
+    parser.add_argument('--branch', default=os.environ.get('ALLURE_BRANCH', None),
+                      help='Specify branch name (overrides auto-detection)')
+    parser.add_argument('--dry-run', action='store_true',
+                      help='Test run without making changes')
+    parser.add_argument('--version', action='version', version=f'%(prog)s {__version__}',
+                      help='Show version information and exit')
+    
+    return parser.parse_args()
+
+
 def main() -> int:
     """Entry point for the script."""
-    # Support environment variables for CI/CD pipeline integration
-    report_dir = os.environ.get("ALLURE_REPORT_DIR", "reports/allure-report")
-    create_dummy = os.environ.get("ALLURE_CREATE_DUMMY", "false").lower() == "true"
-    custom_branch = os.environ.get("ALLURE_BRANCH", None)
+    global DRY_RUN
     
-    # Command line args override environment variables
-    i = 1
-    while i < len(sys.argv):
-        arg = sys.argv[i]
-        if arg.startswith("--"):
-            if arg == "--dummy":
-                create_dummy = True
-            elif arg == "--branch" and i + 1 < len(sys.argv):
-                custom_branch = sys.argv[i + 1]
-                i += 1
-            elif arg == "--dry-run":
-                # Add dry-run mode for testing in pipelines
-                logger.info("Running in dry-run mode, no changes will be applied")
-                DRY_RUN = True
-        else:
-            report_dir = arg
-        i += 1
+    args = parse_args()
+    
+    # Set dry run mode if specified
+    DRY_RUN = args.dry_run
+    if DRY_RUN:
+        logger.info("Running in dry-run mode, no changes will be applied")
+    
+    report_dir = args.report_dir
+    create_dummy = args.dummy
+    custom_branch = args.branch
     
     logger.info(f"Processing Allure report in {report_dir}...")
     
@@ -934,6 +881,8 @@ def main() -> int:
         return 0
     except Exception as e:
         logger.error(f"Error customizing Allure report: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
         return 1
 
 
