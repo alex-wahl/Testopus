@@ -40,6 +40,19 @@ def create_dummy_report(report_dir: str) -> None:
         report_dir: Path to create the dummy report.
     """
     ensure_dir_exists(report_dir)
+
+    # Create history directory
+    history_dir = os.path.join(report_dir, "history")
+    ensure_dir_exists(history_dir)
+
+    # Create an empty history file to ensure directory is not empty
+    with open(
+        os.path.join(history_dir, "dummy-history.json"), "w", encoding="utf-8"
+    ) as f:
+        f.write(
+            '{"data": {"time": {"start": %d}}}' % int(datetime.now().timestamp() * 1000)
+        )
+
     today = get_current_date_formatted()
 
     # Get the template file path
