@@ -38,27 +38,37 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     };
 
-    // Handle tab navigation errors (including 'undefined' tab)
+    // Enhanced tab navigation error handling (including 'undefined' tab)
     var handleTabNavigation = function(e) {
+        var target = e.target;
+        // Ensure we have the link element if click was on a child
+        while (target && !target.getAttribute('href') && target.parentElement) {
+            target = target.parentElement;
+        }
+
         // Check if this is a tab link
-        var href = e.target.getAttribute('href');
+        var href = target.getAttribute('href');
         if (href && href.indexOf('#') === 0) {
-            // Special handling for 'undefined' tab
-            if (href === '#undefined' || href === '#null' || href === '#NaN') {
+            // Special handling for 'undefined' tab and other invalid tabs
+            if (href === '#undefined' || href === '#null' || href === '#NaN' || href === '') {
                 e.preventDefault();
                 console.warn('Invalid tab requested:', href);
 
-                // Find and click first available tab instead
+                // Find first available tab
                 var firstTab = document.querySelector('.allure-tabs a');
                 if (firstTab) {
                     firstTab.click();
-                } else {
-                    // If no tabs found, attempt to navigate to overview tab
-                    var overviewTab = document.querySelector('[href="#overview"]');
-                    if (overviewTab) {
-                        overviewTab.click();
-                    }
+                    return;
                 }
+
+                // If no tabs found, redirect to overview
+                if (document.querySelector('[href="#overview"]')) {
+                    document.querySelector('[href="#overview"]').click();
+                    return;
+                }
+
+                // Last resort - reload the page
+                location.href = location.href.split('#')[0];
                 return;
             }
 
@@ -76,6 +86,21 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }
     };
+
+    // Fix direct URL hash navigation on page load
+    var fixInitialUrlHash = function() {
+        var hash = location.hash;
+        if (hash === '#undefined' || hash === '#null' || hash === '#NaN' || hash === '') {
+            // Reset to overview or remove hash
+            location.hash = '#overview';
+        } else if (hash && !document.querySelector(hash)) {
+            // If hash exists but element doesn't, reset to overview
+            location.hash = '#overview';
+        }
+    };
+
+    // Run initial hash fix
+    setTimeout(fixInitialUrlHash, 100);
 
     // Add click handlers
     document.addEventListener('click', handleMissingTest, true);

@@ -586,10 +586,20 @@ def preserve_history(report_dir: str) -> None:
     ensure_dir_exists(history_storage)
     ensure_dir_exists(storage_history_dir)
     ensure_dir_exists(history_dir)
+    ensure_dir_exists(results_history_dir)
 
-    # Initialize history storage if empty
+    # Initialize empty history files if necessary
+    if not os.path.exists(history_dir) or not os.listdir(history_dir):
+        initialize_history_files(history_dir)
+        logger.info(f"Initialized empty history files in {history_dir}")
+
     if not os.path.exists(storage_history_dir) or not os.listdir(storage_history_dir):
         initialize_history_files(storage_history_dir)
+        logger.info(f"Initialized empty history files in {storage_history_dir}")
+
+    if not os.path.exists(results_history_dir) or not os.listdir(results_history_dir):
+        initialize_history_files(results_history_dir)
+        logger.info(f"Initialized empty history files in {results_history_dir}")
 
     # If we don't have history data in the report, generate it
     history_empty = not os.path.exists(history_dir) or not os.listdir(history_dir)
@@ -597,7 +607,31 @@ def preserve_history(report_dir: str) -> None:
 
     if history_empty and storage_empty:
         logger.info("No history data found, generating basic history from current run")
-        generate_basic_history_data(report_dir, history_dir)
+        success = generate_basic_history_data(report_dir, history_dir)
+        if success:
+            logger.info("Successfully generated basic history data")
+        else:
+            logger.warning("Failed to generate basic history data")
+
+    # Force a copy of history files to the results directory for next run
+    if os.path.exists(storage_history_dir):
+        logger.info(f"Copying history from storage to results: {storage_history_dir} -> {results_history_dir}")
+        for file_name in HISTORY_FILES:
+            src_file = os.path.join(storage_history_dir, file_name)
+            dst_file = os.path.join(results_history_dir, file_name)
+
+            if os.path.exists(src_file):
+                try:
+                    # Ensure destination directory exists
+                    os.makedirs(os.path.dirname(dst_file), exist_ok=True)
+
+                    # Copy the file
+                    import shutil
+
+                    shutil.copy2(src_file, dst_file)
+                    logger.info(f"Copied {file_name} to results directory")
+                except Exception as e:
+                    logger.error(f"Error copying {file_name}: {str(e)}")
 
     # Merge history from report to storage
     if os.path.exists(history_dir) and os.listdir(history_dir):
@@ -614,5 +648,6 @@ def preserve_history(report_dir: str) -> None:
 
     # Final display of contents
     display_dir_contents(storage_history_dir, "Final storage history directory contents")
+    display_dir_contents(results_history_dir, "Final results history directory contents")
 
     logger.info("History preservation completed successfully")
