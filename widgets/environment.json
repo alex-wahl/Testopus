@@ -1,0 +1,44 @@
+[
+  {
+    "name": "Branch",
+    "values": [
+      "historical_data"
+    ]
+  },
+  {
+    "values": [
+      "Chrome"
+    ],
+    "name": "Browser"
+  },
+  {
+    "values": [
+      "latest"
+    ],
+    "name": "Browser.Version"
+  },
+  {
+    "values": [
+      "linux"
+    ],
+    "name": "OS"
+  },
+  {
+    "values": [
+      "3.12.9"
+    ],
+    "name": "Python.Version"
+  },
+  {
+    "values": [
+      "29-03-2025 17:25:57.840626"
+    ],
+    "name": "Timestamp"
+  },
+  {
+    "values": [
+      "Europe/Berlin"
+    ],
+    "name": "Timezone"
+  }
+]

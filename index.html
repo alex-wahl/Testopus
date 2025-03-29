@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html dir="ltr" lang="en">
+<head>
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0"> 
+    <meta charset="utf-8">
+    <title>ALLURE REPORT 29-03-2025</title>
+    <link rel="favicon" href="favicon.ico">
+    <link rel="stylesheet" type="text/css" href="styles.css">
+    <link rel="stylesheet" type="text/css" href="plugin/screen-diff/styles.css">
+<script type="text/javascript">
+// Fix for branch tab and 404 errors
+document.addEventListener('DOMContentLoaded', function() {
+    // Add branch data attribute to body
+    document.body.setAttribute('data-branch', 'historical_data');
+    
+    // Fix 404 errors on tab navigation
+    var handleAnchorClick = function(e) {
+        var href = e.target.getAttribute('href');
+        if (href && href.indexOf('#') === 0) {
+            var targetTab = document.querySelector(href);
+            if (!targetTab) {
+                e.preventDefault();
+                console.warn('Tab not found:', href);
+                // Redirect to first available tab instead
+                var firstTab = document.querySelector('.allure-tabs a');
+                if (firstTab) firstTab.click();
+            }
+        }
+    };
+    
+    // Add listeners to tab navigation links
+    var tabLinks = document.querySelectorAll('.allure-tabs a');
+    tabLinks.forEach(function(link) {
+        link.addEventListener('click', handleAnchorClick);
+    });
+});
+
+</script><script type="text/javascript">
+// Fix for 404 errors when test results are missing
+document.addEventListener('DOMContentLoaded', function() {
+    // Intercept AJAX requests to detect 404 errors for test results
+    var originalFetch = window.fetch;
+    window.fetch = function(url, options) {
+        return originalFetch(url, options).then(function(response) {
+            // If request is for a test result and fails with 404
+            if (response.status === 404 && url.includes('/data/test-cases/')) {
+                console.warn('Test result not found:', url);
+                
+                // Create a minimal valid test result to prevent UI errors
+                return new Response(JSON.stringify({
+                    uid: url.split('/').pop(),
+                    name: 'Test result not available',
+                    status: 'unknown',
+                    time: { start: 0, stop: 0, duration: 0 },
+                    statusDetails: { 
+                        message: 'This test result is no longer available in the report.',
+                        trace: 'The test data may have been removed or the ID changed between test runs.' 
+                    }
+                }), {
+                    status: 200,
+                    headers: { 'Content-Type': 'application/json' }
+                });
+            }
+            return response;
+        });
+    };
+    
+    // Also handle direct navigation to test cases that don't exist
+    var handleMissingTest = function(e) {
+        if (e.target.classList.contains('test-case')) {
+            var uid = e.target.getAttribute('href').split('/').pop();
+            if (!document.querySelector('[data-uid="' + uid + '"]')) {
+                e.preventDefault();
+                alert('Test result not available. The test may have been removed or renamed in a recent run.');
+            }
+        }
+    };
+    
+    // Add click handler to test-result links
+    document.addEventListener('click', handleMissingTest, true);
+});
+
+</script></head>
+<body>
+    <div id="alert"></div>
+    <div id="content">
+        <span class="spinner">
+            <span class="spinner__circle"></span>
+        </span>
+    </div>
+    <div id="popup"></div>
+    <script src="app.js"></script>
+    <script src="plugin/behaviors/index.js"></script>
+    <script src="plugin/screen-diff/index.js"></script>
+    <script src="plugin/packages/index.js"></script>
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-FVWC4GKEYS"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'G-FVWC4GKEYS');
+        gtag('allureVersion', 'dev')
+        gtag('reportUuid', '09274ae4-93a4-483e-bbf2-7752783d98a6')
+    </script>
+
+<script>
+// Date format standardization script (v1.3.0)
+document.addEventListener('DOMContentLoaded', function() {
+  console.log('[Allure Customizer] Running date format standardization');
+  
+  // Run immediately and after content might have loaded
+  fixAllureDates();
+  setTimeout(fixAllureDates, 500);
+  setTimeout(fixAllureDates, 1500);
+  
+  // Also set up a mutation observer to catch dynamic content
+  if ('MutationObserver' in window) {
+    const observer = new MutationObserver(function(mutations) {
+      // Only update if there are textual changes
+      const textChanges = mutations.some(mutation => 
+        mutation.addedNodes.length > 0 || 
+        mutation.type === 'characterData'
+      );
+      
+      if (textChanges) {
+        fixAllureDates();
+      }
+    });
+    
+    // Start observing the document body for DOM changes
+    observer.observe(document.body, {
+      childList: true,
+      subtree: true,
+      characterData: true
+    });
+    console.log('[Allure Customizer] Date formatter observer started');
+  }
+  
+  function fixAllureDates() {
+    // Convert any MM/DD/YYYY to DD-MM-YYYY in the document
+    const datePattern = /(ALLURE REPORT |Allure Report )(\d{1,2})\/(\d{1,2})\/(\d{4})/gi;
+    
+    // Process all text nodes in the document
+    const textNodes = [];
+    const walker = document.createTreeWalker(
+      document.body,
+      NodeFilter.SHOW_TEXT,
+      null,
+      false
+    );
+    
+    let node;
+    while (node = walker.nextNode()) {
+      if (node.nodeValue.match(datePattern)) {
+        node.nodeValue = node.nodeValue.replace(datePattern, function(match, prefix, month, day, year) {
+          return prefix + day + '-' + month + '-' + year;
+        });
+      }
+    }
+    
+    // Also check specific DOM elements that may contain the date
+    const headerElements = document.querySelectorAll('.header, [class*="header"], [class*="title"], h1, h2');
+    headerElements.forEach(function(el) {
+      if (el.innerText && el.innerText.match(datePattern)) {
+        el.innerText = el.innerText.replace(datePattern, function(match, prefix, month, day, year) {
+          return prefix + day + '-' + month + '-' + year;
+        });
+      }
+    });
+  }
+}); 
+</script>
+</body>
+</html>

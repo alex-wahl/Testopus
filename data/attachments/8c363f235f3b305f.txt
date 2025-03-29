@@ -1,0 +1,1 @@
+test_config:  {'configuration': {'gasag': {'web_url': 'https://www.gasag.de', 'username': 'waal.mos@gmail.com', 'password': 'Test1234!'}}}

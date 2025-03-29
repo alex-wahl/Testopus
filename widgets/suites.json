@@ -1,0 +1,1 @@
+{"total":2,"items":[{"uid":"ea8e2bc6cff970ca7919c0c034c36a27","name":"tests.ui_tests.web.gasag","statistic":{"failed":0,"broken":0,"skipped":0,"passed":12,"unknown":0,"total":12}},{"uid":"9976ba2d160cbd3e423b028632485f56","name":"tests.internal_tests","statistic":{"failed":0,"broken":0,"skipped":0,"passed":1,"unknown":0,"total":1}}]}
