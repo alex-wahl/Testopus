@@ -51,10 +51,39 @@ def create_cache_busting_script(report_dir: str, timestamp: int) -> None:
     
     script_content = f"""// Cache-busting script generated on {datetime.now().isoformat()}
 document.addEventListener('DOMContentLoaded', function() {{
+  // Cache busting redirect
   if(!window.location.search.includes('ts=')) {{
     window.location.href = window.location.href + 
       (window.location.search ? '&' : '?') + 
       'ts={timestamp}';
+  }}
+  
+  // Fix title date format if found
+  try {{
+    const titleElements = document.querySelectorAll('.allure-report-title, .title, h1');
+    const dateRegex = /(ALLURE\\s+REPORT\\s+)(\\d{{1,2}})\\/(\\d{{1,2}})\\/(\\d{{4}})/i;
+    
+    titleElements.forEach(function(element) {{
+      if (element && element.textContent) {{
+        const match = element.textContent.match(dateRegex);
+        if (match) {{
+          // Create DD-MM-YYYY format
+          const day = match[3].padStart(2, '0');
+          const month = match[2].padStart(2, '0');
+          const year = match[4];
+          element.textContent = `${{match[1]}}${{day}}-${{month}}-${{year}}`;
+          console.log('Fixed title date format via JS');
+        }}
+      }}
+    }});
+    
+    // Also try to fix document title
+    if (document.title.match(/Allure Report \\d{{1,2}}\\/\\d{{1,2}}\\/\\d{{4}}/i)) {{
+      document.title = "Allure Report {get_current_date_formatted()}";
+      console.log('Fixed document title via JS');
+    }}
+  }} catch (e) {{
+    console.error('Error fixing date format:', e);
   }}
 }});
 """
@@ -169,6 +198,36 @@ def fix_title_date_format(report_dir: str) -> None:
     """
     today = get_current_date_formatted()
     
+    # Find index.html - special direct replacement for the main page
+    index_file = os.path.join(report_dir, "index.html")
+    if os.path.exists(index_file):
+        print(f"✅ Processing index.html directly...")
+        try:
+            with open(index_file, 'r', encoding='utf-8') as f:
+                content = f.read()
+            
+            # Direct substitute any pattern like "ALLURE REPORT MM/DD/YYYY" to our desired format
+            # First find the pattern with regex
+            title_matches = re.findall(r'ALLURE REPORT \d{1,2}/\d{1,2}/\d{4}', content, re.IGNORECASE)
+            if title_matches:
+                for match in title_matches:
+                    content = content.replace(match, f"ALLURE REPORT {today}")
+                    print(f"  - Replaced '{match}' with 'ALLURE REPORT {today}'")
+            
+            # Also try with regex capturing the date parts
+            content = re.sub(
+                r'(ALLURE\s+REPORT\s+)\d{1,2}/\d{1,2}/\d{4}', 
+                f'\\1{today}', 
+                content,
+                flags=re.IGNORECASE
+            )
+            
+            # Write the updated content
+            with open(index_file, 'w', encoding='utf-8') as f:
+                f.write(content)
+        except Exception as e:
+            print(f"⚠️ Warning: Error updating index.html: {e}")
+    
     # Process HTML files
     html_files = glob.glob(os.path.join(report_dir, "**", "*.html"), recursive=True)
     for html_file in html_files:
@@ -182,12 +241,21 @@ def fix_title_date_format(report_dir: str) -> None:
             content
         )
         
-        # Fix header titles with date
-        new_content = re.sub(
-            r'ALLURE REPORT \d{1,2}/\d{1,2}/\d{4}', 
-            f'ALLURE REPORT {today}', 
-            new_content
-        )
+        # Fix header titles with date - case insensitive matching
+        patterns = [
+            r'ALLURE REPORT \d{1,2}/\d{1,2}/\d{4}',  # ALLURE REPORT 3/29/2025
+            r'Allure Report \d{1,2}/\d{1,2}/\d{4}',  # Allure Report 3/29/2025
+            r'ALLURE REPORT \d{1,2}-\d{1,2}-\d{4}',  # ALLURE REPORT 3-29-2025
+            r'Allure Report \d{1,2}-\d{1,2}-\d{4}'   # Allure Report 3-29-2025
+        ]
+        
+        for pattern in patterns:
+            new_content = re.sub(
+                pattern, 
+                f'ALLURE REPORT {today}', 
+                new_content,
+                flags=re.IGNORECASE
+            )
         
         if new_content != content:
             with open(html_file, 'w', encoding='utf-8') as f:
@@ -199,19 +267,34 @@ def fix_title_date_format(report_dir: str) -> None:
         with open(js_file, 'r', encoding='utf-8') as f:
             content = f.read()
         
-        # Replace dates in various formats
-        new_content = re.sub(
-            r'\b(\d{1,2})/(\d{1,2})/(\d{4})\b', 
-            lambda m: f"{m.group(2)}-{m.group(1)}-{m.group(3)}", 
-            content
-        )
+        # Replace dates in various formats - all possible formats
+        for pattern in [
+            r'\b(\d{1,2})/(\d{1,2})/(\d{4})\b',  # MM/DD/YYYY
+            r'\b(\d{4})/(\d{1,2})/(\d{1,2})\b',  # YYYY/MM/DD
+            r'\b(\d{1,2})-(\d{1,2})-(\d{4})\b',  # MM-DD-YYYY
+            r'\b(\d{4})-(\d{1,2})-(\d{1,2})\b'   # YYYY-MM-DD
+        ]:
+            new_content = re.sub(
+                pattern, 
+                f"{today}", 
+                new_content
+            )
         
-        # Replace title strings
-        new_content = re.sub(
-            r'ALLURE REPORT \d{1,2}/\d{1,2}/\d{4}', 
-            f'ALLURE REPORT {today}', 
-            new_content
-        )
+        # Direct text replacement for title strings
+        for title_pattern in [
+            r'ALLURE REPORT \d{1,2}/\d{1,2}/\d{4}',
+            r'Allure Report \d{1,2}/\d{1,2}/\d{4}',
+            r'"title":"ALLURE REPORT \d{1,2}/\d{1,2}/\d{4}"',
+            r'"title":"Allure Report \d{1,2}/\d{1,2}/\d{4}"',
+            r'"title": "ALLURE REPORT \d{1,2}/\d{1,2}/\d{4}"',
+            r'"title": "Allure Report \d{1,2}/\d{1,2}/\d{4}"'
+        ]:
+            new_content = re.sub(
+                title_pattern, 
+                f'ALLURE REPORT {today}', 
+                new_content,
+                flags=re.IGNORECASE
+            )
         
         # Replace date format patterns
         new_content = re.sub(
@@ -223,6 +306,32 @@ def fix_title_date_format(report_dir: str) -> None:
         if new_content != content:
             with open(js_file, 'w', encoding='utf-8') as f:
                 f.write(new_content)
+    
+    # Look for the Widgets JS file specifically (often controls title)
+    widgets_files = glob.glob(os.path.join(report_dir, "**", "widgets.js"), recursive=True)
+    for widget_file in widgets_files:
+        try:
+            with open(widget_file, 'r', encoding='utf-8') as f:
+                content = f.read()
+            
+            # Brute force replacement of any MM/DD/YYYY pattern with our desired format
+            # This is a more aggressive approach for the widgets.js file
+            for month in range(1, 13):
+                for day in range(1, 32):
+                    for year in [2023, 2024, 2025, 2026]:
+                        old_date = f"{month}/{day}/{year}"
+                        
+                        # Replace in the content
+                        content = content.replace(old_date, today)
+                        content = content.replace(f'"{old_date}"', f'"{today}"')
+                        content = content.replace(f"'{old_date}'", f"'{today}'")
+            
+            with open(widget_file, 'w', encoding='utf-8') as f:
+                f.write(content)
+                
+            print(f"✅ Fixed dates in widgets.js")
+        except Exception as e:
+            print(f"⚠️ Warning: Failed to process widgets.js: {e}")
     
     print("✅ Fixed date format in report titles")
 
