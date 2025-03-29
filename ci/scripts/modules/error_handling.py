@@ -7,7 +7,6 @@ ensuring the reports are resilient against broken links and missing resources.
 
 import logging
 import os
-from pathlib import Path
 
 # Set up logging
 logger = logging.getLogger("allure-customizer.error-handling")
@@ -26,6 +25,17 @@ def set_dry_run(dry_run: bool) -> None:
     DRY_RUN = dry_run
 
 
+def setup_error_handling() -> None:
+    """Set up error handling for the script.
+
+    This function configures the basic error handling and logging
+    for the script's execution.
+    """
+    # Configure basic exception handling
+    logging.captureWarnings(True)
+    logger.info("Error handling configured")
+
+
 def fix_missing_test_results(report_dir: str) -> None:
     """Add JavaScript to handle 404 errors when test results are missing.
 
@@ -37,12 +47,12 @@ def fix_missing_test_results(report_dir: str) -> None:
         report_dir: Path to the Allure report directory.
     """
     if DRY_RUN:
-        logger.info(f"DRY-RUN: Would add 404 handling script to index.html")
+        logger.info("DRY-RUN: Would add 404 handling script to index.html")
         return
 
     index_file = os.path.join(report_dir, "index.html")
     if not os.path.exists(index_file):
-        logger.warning(f"index.html not found at {index_file}")
+        logger.warning("index.html not found at {0}".format(index_file))
         return
 
     try:
@@ -54,7 +64,9 @@ def fix_missing_test_results(report_dir: str) -> None:
 
         if not os.path.exists(fix_404_js_path):
             logger.warning(
-                f"404 error handling JavaScript file not found at {fix_404_js_path}"
+                "404 error handling JavaScript file not found at {0}".format(
+                    fix_404_js_path
+                )
             )
             return
 
@@ -68,13 +80,15 @@ def fix_missing_test_results(report_dir: str) -> None:
 
         # Add the script to the head section
         if "</head>" in content:
-            script_tag = f'<script type="text/javascript">\n{fix_404_script}\n</script>'
+            script_tag = '<script type="text/javascript">\n{0}\n</script>'.format(
+                fix_404_script
+            )
             content = content.replace("</head>", script_tag + "</head>")
 
             with open(index_file, "w", encoding="utf-8") as f:
                 f.write(content)
-            logger.info(f"Added 404 handling script to index.html")
+            logger.info("Added 404 handling script to index.html")
         else:
             logger.warning("Could not find </head> in index.html")
     except Exception as e:
-        logger.error(f"Failed to add 404 handling script: {str(e)}")
+        logger.error("Failed to add 404 handling script: {0}".format(str(e)))

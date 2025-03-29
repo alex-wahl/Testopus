@@ -15,7 +15,8 @@ from pathlib import Path
 # Add the parent directory to the path so we can import the script
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-import customize_allure_report
+# Now import the modules
+from customize_allure_report import __version__
 from modules.branch_info import get_branch_name
 from modules.date_formatter import get_current_date_formatted
 
@@ -53,7 +54,7 @@ class TestBasicFunctionality(unittest.TestCase):
         Verifies that the version in the main script matches the expected version
         from constants.
         """
-        self.assertEqual(customize_allure_report.__version__, VERSION)
+        self.assertEqual(__version__, VERSION)
 
     def test_get_current_date_formatted(self):
         """Test that get_current_date_formatted returns a string.

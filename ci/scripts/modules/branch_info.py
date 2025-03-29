@@ -9,6 +9,7 @@ import logging
 import os
 import re
 import subprocess
+from typing import Optional
 
 from utils.constants import ENV_GITHUB_HEAD_REF, ENV_GITHUB_REF, ENV_PROPERTIES_FILE
 from utils.file_utils import find_files, read_file, write_file
@@ -43,14 +44,14 @@ def get_branch_name() -> str:
     """
     # Try environment variables first (for CI)
     # GitHub Actions
-    if os.environ.get(ENV_GITHUB_HEAD_REF):
-        return os.environ.get(ENV_GITHUB_HEAD_REF)
+    github_head_ref = os.environ.get(ENV_GITHUB_HEAD_REF)
+    if github_head_ref:
+        return github_head_ref
 
     # For GitHub Actions push events
-    if os.environ.get(ENV_GITHUB_REF):
-        ref = os.environ.get(ENV_GITHUB_REF)
-        if ref.startswith("refs/heads/"):
-            return ref.replace("refs/heads/", "")
+    github_ref = os.environ.get(ENV_GITHUB_REF)
+    if github_ref and github_ref.startswith("refs/heads/"):
+        return github_ref.replace("refs/heads/", "")
 
     # Try getting branch from git command
     try:
@@ -127,7 +128,7 @@ def update_environment_properties(report_dir: str, branch: str) -> None:
     if not os.path.exists(env_file):
         logger.info("Creating environment.properties file")
         with open(env_file, "w") as f:
-            f.write(f"Branch={branch}\n")
+            f.write("Branch={0}\n".format(branch))
         return
 
     # Read existing file
@@ -137,20 +138,20 @@ def update_environment_properties(report_dir: str, branch: str) -> None:
     with open(env_file, "r") as f:
         for line in f:
             if line.startswith("Branch="):
-                lines.append(f"Branch={branch}\n")
+                lines.append("Branch={0}\n".format(branch))
                 branch_line_exists = True
             else:
                 lines.append(line)
 
     # Add branch info if not present
     if not branch_line_exists:
-        lines.append(f"Branch={branch}\n")
+        lines.append("Branch={0}\n".format(branch))
 
     # Write updated file
     with open(env_file, "w") as f:
         f.writelines(lines)
 
-    logger.info(f"Updated environment.properties with branch {branch}")
+    logger.info("Updated environment.properties with branch {0}".format(branch))
 
 
 def update_environment_json(report_dir: str, branch: str) -> None:
@@ -163,7 +164,9 @@ def update_environment_json(report_dir: str, branch: str) -> None:
     import json
 
     if _dry_run:
-        logger.info(f"DRY RUN: Would update environment.json with branch {branch}")
+        logger.info(
+            "DRY RUN: Would update environment.json with branch {0}".format(branch)
+        )
         return
 
     # Find environment.json files
@@ -197,9 +200,9 @@ def update_environment_json(report_dir: str, branch: str) -> None:
             with open(env_file, "w") as f:
                 json.dump(data, f, indent=2)
 
-            logger.info(f"Updated {env_file} with branch {branch}")
+            logger.info("Updated {0} with branch {1}".format(env_file, branch))
         except Exception as e:
-            logger.warning(f"Error updating environment.json: {str(e)}")
+            logger.warning("Error updating environment.json: {0}".format(str(e)))
 
 
 def update_environment_html(report_dir: str, branch: str) -> None:
@@ -210,7 +213,7 @@ def update_environment_html(report_dir: str, branch: str) -> None:
         branch: Branch name to add
     """
     if _dry_run:
-        logger.info(f"DRY RUN: Would update HTML files with branch {branch}")
+        logger.info("DRY RUN: Would update HTML files with branch {0}".format(branch))
         return
 
     # Find all HTML files
@@ -232,16 +235,19 @@ def update_environment_html(report_dir: str, branch: str) -> None:
                     # Inject into environment section
                     new_content = re.sub(
                         r"(<div class=\"environment\">)",
-                        f"\\1\n<div>Branch: {branch}</div>",
+                        "\\1\n<div>Branch: {0}</div>".format(branch),
                         content,
                     )
                 elif "<body>" in content:
                     # Inject after body tag
+                    # Break long line into shorter parts
+                    div_start = (
+                        '\\1\n<div style="position:fixed;top:0;right:0;padding:5px;'
+                    )
+                    div_style = 'background:#f8f8f8;z-index:1000;font-size:12px;">'
+                    div_content = "Branch: {0}</div>".format(branch)
                     new_content = re.sub(
-                        r"(<body>)",
-                        '\\1\n<div style="position:fixed;top:0;right:0;padding:5px;background:#f8f8f8;z-index:1000;font-size:12px;">'
-                        f"Branch: {branch}</div>",
-                        content,
+                        r"(<body>)", div_start + div_style + div_content, content
                     )
                 else:
                     # Skip if no injection point found
@@ -251,12 +257,14 @@ def update_environment_html(report_dir: str, branch: str) -> None:
                     if write_file(html_file, new_content):
                         updated_count += 1
         except Exception as e:
-            logger.warning(f"Error updating HTML file {html_file}: {str(e)}")
+            logger.warning(
+                "Error updating HTML file {0}: {1}".format(html_file, str(e))
+            )
 
-    logger.info(f"Updated {updated_count} HTML files with branch information")
+    logger.info("Updated {0} HTML files with branch information".format(updated_count))
 
 
-def add_branch_info(report_dir: str, branch: str = None) -> None:
+def add_branch_info(report_dir: str, branch: Optional[str] = None) -> None:
     """Add branch information to Allure report.
 
     This is the main entry point for adding branch information.
@@ -269,7 +277,7 @@ def add_branch_info(report_dir: str, branch: str = None) -> None:
     if branch is None:
         branch = get_branch_name()
 
-    logger.info(f"Adding branch information: {branch}")
+    logger.info("Adding branch information: {0}".format(branch))
 
     # Update environment.properties
     update_environment_properties(report_dir, branch)
