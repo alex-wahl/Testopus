@@ -227,23 +227,23 @@ def _create_404_page(report_dir: str) -> None:
 
 def _create_fallback_404_page(report_dir: str) -> None:
     """Create a simple fallback 404.html page when template is missing.
-    
+
     Args:
         report_dir: The report directory path
     """
     # Get path to fallback template
     template_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "templates")
     fallback_template_path = os.path.join(template_dir, "fallback_404.html")
-    
+
     try:
         # Read the fallback template
         with open(fallback_template_path, "r", encoding="utf-8") as f:
             fallback_content = f.read()
-            
+
         error_page_path = os.path.join(report_dir, "404.html")
         with open(error_page_path, "w", encoding="utf-8") as f:
             f.write(fallback_content)
-        
+
         logger.info(f"Created fallback 404 error page at {error_page_path}")
     except Exception as e:
         logger.error(f"Critical error: Could not read fallback template: {str(e)}")
