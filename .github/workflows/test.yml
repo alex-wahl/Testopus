@@ -119,6 +119,10 @@ jobs:
           fi
         env:
           DEBUG_MODE: ${{ github.event.inputs.debug_mode == 'true' }}
+          PYTHONPATH: /app
+          DOCKER_ENV: true
+          PYTEST_ADDOPTS: --verbose
+          TZ: Europe/Berlin
       
       - name: Clean up containers
         if: always()

@@ -93,12 +93,18 @@ def pytest_sessionfinish(session):
     # Get browser info if available
     browser_name = os.environ.get("BROWSER", "Chrome")
     browser_version = os.environ.get("BROWSER_VERSION", "latest")
+
+    # Set timezone to Berlin
+    os.environ['TZ'] = 'Europe/Berlin'
+    time.tzset()  # Apply timezone change
     
     with open(env_file, "w") as f:
         f.write(f"Browser={browser_name}\n")
         f.write(f"Browser.Version={browser_version}\n")
         f.write(f"OS={sys.platform}\n")
         f.write(f"Python.Version={sys.version.split(' ')[0]}\n")
+        f.write(f"Timestamp={datetime.datetime.now().isoformat()}\n")
+        f.write(f"Timezone=Europe/Berlin\n")
         f.write(f"Timestamp={datetime.datetime.now().isoformat()}\n")
 
 # Add additional metadata using Allure's API
