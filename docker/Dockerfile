@@ -17,6 +17,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
     chromium \
     chromium-driver \
+    findutils \
+    procps \
     && rm -rf /var/lib/apt/lists/* \
     && pip install --no-cache-dir --upgrade pip \
     && pip install --no-cache-dir hatch
@@ -41,11 +43,24 @@ RUN pip install --no-cache-dir \
     responses>=0.25.6 \
     pydantic>=2.10.6 \
     requests>=2.31.0 \
-    pytest-html>=3.2.0
+    pytest-html>=3.2.0 \
+    Faker==37.0.0 \
+    pyscreenshot==3.1 \
+    pyviztest==1.0.0 \
+    pydantic-ai==0.0.36 \
+    langchain==0.1.12 \
+    pyyaml>=6.0.2 \
+    python-dotenv==1.0.1
 
 # Copy the rest of the code
 COPY . .
 
+# Create empty test file to verify test discovery
+RUN mkdir -p /app/tests/internal_tests && \
+    echo 'def test_verify_docker_works(): assert True' > /app/tests/internal_tests/test_docker_verify.py && \
+    ls -la /app/tests && \
+    find /app -name "test_*.py" | sort
+
 # Default to running with Python directly (not Hatch)
-ENTRYPOINT ["python", "-m", "pytest"]
+ENTRYPOINT ["python", "-m", "pytest", "--verbose"]
 CMD ["tests"]

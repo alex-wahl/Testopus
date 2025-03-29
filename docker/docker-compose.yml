@@ -4,10 +4,11 @@ services:
     image: testopus:latest
     container_name: testopus
     volumes:
-      - ..:/app
+      - ..:/app:delegated
     environment:
       - PYTHONPATH=/app
       - DOCKER_ENV=true
+      - PYTEST_ADDOPTS=--verbose
     # Run with appropriate flags for Allure reporting
-    command: --alluredir=reports/allure-results --html=reports/html/report.html tests
+    command: --verbose -vv --alluredir=/app/reports/allure-results --html=/app/reports/html/report.html --self-contained-html /app/tests
     shm_size: 2gb  
