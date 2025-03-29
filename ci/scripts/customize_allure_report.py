@@ -322,60 +322,62 @@ def update_environment_html(report_dir: str, branch: str) -> None:
 
 
 def update_index_html(report_dir: str, branch: str) -> None:
-    """Update index.html with JavaScript to dynamically update branch information.
+    """Update index.html file with JavaScript to display branch information.
     
     Args:
         report_dir: Path to the Allure report directory.
         branch: Branch name to add.
     """
-    index_html = os.path.join(report_dir, "index.html")
-    if not os.path.exists(index_html):
-        logger.warning(f"index.html not found at {index_html}")
-        return
-    
-    # Path to JavaScript files
-    js_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "js")
-    branch_js_path = os.path.join(js_dir, "branch_position.js")
-    
-    if not os.path.exists(branch_js_path):
-        logger.error(f"JavaScript file not found: {branch_js_path}")
+    index_file = os.path.join(report_dir, "index.html")
+    if not os.path.exists(index_file):
+        logger.warning(f"index.html not found at {index_file}")
         return
         
     try:
-        # Load JavaScript from external file
-        with open(branch_js_path, 'r', encoding='utf-8') as f:
-            branch_script_template = f.read()
-        
-        # Replace placeholders with actual values
-        branch_script = branch_script_template\
-            .replace('{BRANCH_NAME}', branch)\
-            .replace('{VERSION}', __version__)
-        
-        # Wrap in script tags
-        branch_script = f"<script>\n{branch_script}\n</script>"
-        
-        # Insert into HTML
-        with open(index_html, 'r', encoding='utf-8') as f:
+        with open(index_file, 'r', encoding='utf-8') as f:
             content = f.read()
         
-        # Remove any existing branch positioning scripts
-        content = re.sub(
-            r'<script>\s*//\s*(?:Branch|Immediate script to update branch name).*?</script>',
-            '',
-            content,
-            flags=re.DOTALL
-        )
+        # Make data-branch attribute available and ensure 404 doesn't occur on tab navigation
+        if '</head>' in content:
+            fix_tabs_script = """
+    <script type="text/javascript">
+    // Fix for branch tab and 404 errors
+    document.addEventListener('DOMContentLoaded', function() {
+        // Add branch data attribute to body
+        document.body.setAttribute('data-branch', '%s');
         
-        # Insert script in the head
-        if '<head>' in content:
-            content = content.replace('<head>', f'<head>\n{branch_script}')
-            with open(index_html, 'w', encoding='utf-8') as f:
+        // Fix 404 errors on tab navigation
+        var handleAnchorClick = function(e) {
+            var href = e.target.getAttribute('href');
+            if (href && href.indexOf('#') === 0) {
+                var targetTab = document.querySelector(href);
+                if (!targetTab) {
+                    e.preventDefault();
+                    console.warn('Tab not found:', href);
+                    // Redirect to first available tab instead
+                    var firstTab = document.querySelector('.allure-tabs a');
+                    if (firstTab) firstTab.click();
+                }
+            }
+        };
+        
+        // Add listeners to tab navigation links
+        var tabLinks = document.querySelectorAll('.allure-tabs a');
+        tabLinks.forEach(function(link) {
+            link.addEventListener('click', handleAnchorClick);
+        });
+    });
+    </script>
+""" % branch
+            content = content.replace('</head>', fix_tabs_script + '</head>')
+            
+            with open(index_file, 'w', encoding='utf-8') as f:
                 f.write(content)
-            logger.info(f"Added branch update and positioning script to {index_html}")
+            logger.info(f"Updated index.html with branch info and tab navigation fix")
         else:
-            logger.warning(f"Could not find <head> tag in {index_html}")
+            logger.warning("Could not find </head> in index.html")
     except Exception as e:
-        logger.error(f"Error adding branch script to index.html: {str(e)}")
+        logger.error(f"Failed to update index.html: {str(e)}")
 
 
 def fix_html_title_tags(report_dir: str) -> None:
@@ -819,30 +821,57 @@ def preserve_history(report_dir: str) -> None:
         logger.info("History preservation disabled via environment variable")
         return
     
+    # Define key directories
     history_dir = os.path.join(report_dir, 'history')
-    if not os.path.exists(history_dir):
-        logger.warning(f"No history directory found at {history_dir}")
-        return
-    
-    # Create the history directory if it doesn't exist
+    results_dir = os.path.join(os.path.dirname(report_dir), 'allure-results')
     history_storage = os.path.join(os.path.dirname(report_dir), 'allure-history')
-    os.makedirs(history_storage, exist_ok=True)
     
     if DRY_RUN:
-        logger.info(f"DRY-RUN: Would copy history from {history_dir} to {history_storage}")
+        logger.info(f"DRY-RUN: Would manage history between {history_storage} and {history_dir}")
         return
     
-    try:
-        # First remove the destination directory if it exists (shutil.copytree requires destination to not exist)
-        if os.path.exists(history_storage):
-            shutil.rmtree(history_storage)
+    # Create directories if they don't exist
+    os.makedirs(history_storage, exist_ok=True)
+    os.makedirs(history_dir, exist_ok=True)
+    
+    # Ensure history is properly copied to storage
+    if os.path.exists(history_dir) and any(os.listdir(history_dir)):
+        logger.info(f"Copying history from {history_dir} to {history_storage}")
+        try:
+            # Copy each file individually to avoid directory structure issues
+            for history_file in os.listdir(history_dir):
+                src_file = os.path.join(history_dir, history_file)
+                dst_file = os.path.join(history_storage, history_file)
+                
+                if os.path.isfile(src_file):
+                    shutil.copy2(src_file, dst_file)
+                    logger.info(f"Copied {history_file} to history storage")
             
-        # Then copy the directory
-        shutil.copytree(history_dir, history_storage, dirs_exist_ok=True)
+            logger.info(f"Successfully preserved test history to {history_storage}")
+        except Exception as e:
+            logger.error(f"Failed to preserve history: {str(e)}")
+    else:
+        logger.warning(f"No history data found in {history_dir}")
         
-        logger.info(f"Preserved test history to {history_storage}")
-    except Exception as e:
-        logger.error(f"Failed to preserve history: {str(e)}")
+    # Also ensure results directory has history data for next report generation
+    if os.path.exists(results_dir):
+        results_history_dir = os.path.join(results_dir, 'history')
+        os.makedirs(results_history_dir, exist_ok=True)
+        
+        if os.path.exists(history_storage) and any(os.listdir(history_storage)):
+            logger.info(f"Copying history from storage to results directory")
+            try:
+                # Copy each file individually to avoid directory structure issues
+                for history_file in os.listdir(history_storage):
+                    src_file = os.path.join(history_storage, history_file)
+                    dst_file = os.path.join(results_history_dir, history_file)
+                    
+                    if os.path.isfile(src_file):
+                        shutil.copy2(src_file, dst_file)
+                
+                logger.info(f"Successfully copied history to results directory")
+            except Exception as e:
+                logger.error(f"Error copying history to results: {str(e)}")
 
 
 def parse_args():

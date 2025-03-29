@@ -190,7 +190,15 @@ jobs:
               python3 ci/scripts/customize_allure_report.py --dummy
             else
               # Customize the report using our Python script
+              # Ensure history is preserved between runs
               python3 ci/scripts/customize_allure_report.py --history
+              
+              # Ensure history directory exists for next run
+              mkdir -p reports/allure-history
+              if [ -d "reports/allure-report/history" ]; then
+                echo "Saving history for future runs"
+                cp -r reports/allure-report/history/* reports/allure-history/ || true
+              fi
             fi
           else
             echo "No Allure results found, creating a dummy report"
