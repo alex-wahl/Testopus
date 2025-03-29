@@ -167,12 +167,15 @@ jobs:
             ./allure-2.24.0/bin/allure generate reports/allure-results -o reports/allure-report --clean
             
             # Customize the report using our Python script
-            python3 ci/scripts/customize_allure_report.py reports/allure-report
+            python3 ci/scripts/customize_allure_report.py
           else
             echo "No Allure results found, creating a dummy report"
             python3 ci/scripts/customize_allure_report.py reports/allure-report --dummy
           fi
         env:
+          ALLURE_REPORT_DIR: reports/allure-report
+          ALLURE_CREATE_DUMMY: ${{ !contains(steps.allure-results.outputs.files, '*') }}
+          ALLURE_BRANCH: ${{ github.head_ref || github.ref_name }}
           GITHUB_REF: ${{ github.ref }}
           GITHUB_HEAD_REF: ${{ github.head_ref }}
       
