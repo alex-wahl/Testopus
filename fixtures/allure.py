@@ -9,7 +9,14 @@ from pathlib import Path
 # Make sure directories exist
 @pytest.fixture(scope="session", autouse=True)
 def setup_directories():
-    """Set up report directories at the start of test session."""
+    """Set up report directories at the start of test session.
+    
+    Creates the necessary directory structure for reports including
+    allure-results, html reports, and screenshots.
+    
+    Returns:
+        None
+    """
     directories = [
         "reports/allure-results",
         "reports/html",
@@ -21,7 +28,16 @@ def setup_directories():
 # Setup for HTML reports if using pytest-html
 @pytest.hookimpl(trylast=True)
 def pytest_configure(config):
-    """Add metadata to HTML reports."""
+    """Add metadata to HTML reports.
+    
+    Configures HTML report with additional metadata if pytest-html is installed.
+    
+    Args:
+        config: The pytest config object.
+        
+    Returns:
+        None
+    """
     # This runs if pytest-html is installed
     if hasattr(config, '_html'):
         # Add metadata to HTML report
@@ -36,7 +52,18 @@ def pytest_configure(config):
 # Capture status for each test phase
 @pytest.hookimpl(tryfirst=True, hookwrapper=True)
 def pytest_runtest_makereport(item, call):
-    """Capture test status for each phase (setup, call, teardown)."""
+    """Capture test status for each phase.
+    
+    Stores the test result for setup, call, and teardown phases
+    as attributes on the test item.
+    
+    Args:
+        item: The test item being executed.
+        call: The call information.
+        
+    Yields:
+        The hookwrapper.
+    """
     outcome = yield
     report = outcome.get_result()
     
@@ -46,7 +73,17 @@ def pytest_runtest_makereport(item, call):
 # Screenshot capture on test failure
 @pytest.hookimpl(trylast=True)
 def pytest_runtest_teardown(item):
-    """Capture screenshot on test failure if driver is available."""
+    """Capture screenshot on test failure if driver is available.
+    
+    Attempts to find a webdriver instance and take a screenshot when
+    a test fails, then attaches it to the Allure report.
+    
+    Args:
+        item: The test item being torn down.
+        
+    Returns:
+        None
+    """
     if not hasattr(item, "report_call") or not item.report_call.failed:
         return
     
@@ -87,7 +124,17 @@ def pytest_runtest_teardown(item):
 # Add environment info to Allure report
 @pytest.hookimpl(trylast=True)
 def pytest_sessionfinish(session):
-    """Add environment information to Allure report."""
+    """Add environment information to Allure report.
+    
+    Creates an environment.properties file containing browser, OS, Python version,
+    and timestamp information for the Allure report.
+    
+    Args:
+        session: The pytest session object.
+        
+    Returns:
+        None
+    """
     env_file = Path("reports/allure-results/environment.properties")
     
     # Get browser info if available
@@ -110,7 +157,17 @@ def pytest_sessionfinish(session):
 # Add additional metadata using Allure's API
 @pytest.hookimpl(hookwrapper=True)
 def pytest_runtest_protocol(item):
-    """Add additional metadata using Allure's API."""
+    """Add additional metadata using Allure's API.
+    
+    Extracts test docstrings and pytest markers to populate Allure report
+    with features, stories, severity levels, and tags.
+    
+    Args:
+        item: The test item being executed.
+        
+    Yields:
+        The hookwrapper.
+    """
     # Extract docstrings for test descriptions
     test_doc = item.function.__doc__ or ""
     if test_doc:

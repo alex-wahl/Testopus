@@ -8,6 +8,18 @@ from selenium.webdriver.chrome.service import Service
 
 @pytest.fixture
 def driver():
+    """Create and return a configured Chrome WebDriver instance.
+    
+    Configures a Chrome WebDriver with appropriate options for test automation.
+    Handles both regular and Docker environments, setting headless mode when
+    running in Docker.
+    
+    Returns:
+        webdriver.Chrome: Configured Chrome WebDriver instance.
+        
+    Yields:
+        webdriver.Chrome: The configured driver for test execution.
+    """
     options = Options()
     # Configure headless mode for Docker
     if os.environ.get('DOCKER_ENV') == 'true':
