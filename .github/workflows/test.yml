@@ -216,7 +216,11 @@ jobs:
           force_orphan: true
           enable_jekyll: false
           keep_files: false
-      
+          cname: ${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}
+          user_name: "github-actions[bot]"
+          user_email: "github-actions[bot]@users.noreply.github.com"
+          commit_message: "docs: update Allure report [skip ci]"
+
       # Comment on PR with Report Links
       - name: Comment PR with Report Links
         if: always() && github.event_name == 'pull_request'
