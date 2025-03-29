@@ -51,21 +51,9 @@ def create_cache_busting_script(report_dir: str, timestamp: int) -> None:
     
     script_content = f"""// Cache-busting script generated on {datetime.now().isoformat()}
 document.addEventListener('DOMContentLoaded', function() {{
-  // Only redirect if no timestamp parameter exists
-  // Check for any timestamp parameter to avoid redirect loops
-  if(!window.location.search.includes('ts=') && 
-     !window.location.search.includes('timestamp=') && 
-     !window.location.search.includes('t=')) {{
-    
-    // Use current time rather than server timestamp to avoid hardcoded values
-    const currentTime = new Date().getTime();
-    window.location.href = window.location.href + 
-      (window.location.search ? '&' : '?') + 
-      'ts=' + currentTime;
-    return; // Stop execution to prevent the rest of the script from running during redirect
-  }}
+  // NO REDIRECTS - they cause issues with loading
   
-  // Fix title date format if found - only runs if we're NOT redirecting
+  // Fix title date format if found
   try {{
     const titleElements = document.querySelectorAll('.allure-report-title, .title, h1');
     const dateRegex = /(ALLURE\\s+REPORT\\s+)(\\d{{1,2}})\\/(\\d{{1,2}})\\/(\\d{{4}})/i;
@@ -98,7 +86,7 @@ document.addEventListener('DOMContentLoaded', function() {{
     with open(os.path.join(assets_dir, "force-refresh.js"), "w") as f:
         f.write(script_content)
     
-    print(f"✅ Created cache-busting script with timestamp {timestamp}")
+    print(f"✅ Created date-fixing script")
 
 
 def add_cache_headers(report_dir: str) -> None:
@@ -343,8 +331,140 @@ def fix_title_date_format(report_dir: str) -> None:
     print("✅ Fixed date format in report titles")
 
 
+def fix_meta_tags_in_html(report_dir: str) -> None:
+    """Fix meta tags in HTML files to prevent caching without redirects.
+    
+    Args:
+        report_dir: Path to the Allure report directory.
+    """
+    html_files = glob.glob(os.path.join(report_dir, "**", "*.html"), recursive=True)
+    
+    for html_file in html_files:
+        try:
+            with open(html_file, 'r', encoding='utf-8') as f:
+                content = f.read()
+            
+            # Add cache control meta tags if they don't exist
+            if '<meta http-equiv="Cache-Control"' not in content:
+                new_content = content.replace(
+                    '<head>', 
+                    '<head>\n<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">\n<meta http-equiv="Pragma" content="no-cache">\n<meta http-equiv="Expires" content="0">'
+                )
+                
+                if new_content != content:
+                    with open(html_file, 'w', encoding='utf-8') as f:
+                        f.write(new_content)
+                    print(f"✅ Added cache control meta tags to {os.path.basename(html_file)}")
+        except Exception as e:
+            print(f"⚠️ Warning: Error adding cache control meta tags to {html_file}: {e}")
+    
+    print("✅ Fixed meta tags in HTML files")
+
+
+def fix_spinner_issue(report_dir: str) -> None:
+    """Fix potential infinite spinner issue in Allure report.
+    
+    Args:
+        report_dir: Path to the Allure report directory.
+    """
+    js_files = glob.glob(os.path.join(report_dir, "**", "*.js"), recursive=True)
+    
+    # Look for potential loading issues in JS files
+    for js_file in js_files:
+        try:
+            with open(js_file, 'r', encoding='utf-8') as f:
+                content = f.read()
+            
+            # Add debugging and timeout handling for spinners
+            if 'spinner' in content.lower() or 'loading' in content.lower():
+                modified = False
+                
+                # Add timeout to spinners
+                if 'class="spinner' in content:
+                    # Add timeout to hide spinner after 2 seconds
+                    spinner_fix = """
+// Fix for possible infinite spinner
+document.addEventListener('DOMContentLoaded', function() {
+  setTimeout(function() {
+    var spinners = document.querySelectorAll('.spinner, .spinner_centered');
+    spinners.forEach(function(spinner) {
+      if (spinner) {
+        spinner.style.display = 'none';
+      }
+    });
+    // Try to show content area
+    var content = document.getElementById('content');
+    if (content) {
+      content.style.display = 'block';
+    }
+  }, 2000);
+});
+"""
+                    content += spinner_fix
+                    modified = True
+                
+                if modified:
+                    with open(js_file, 'w', encoding='utf-8') as f:
+                        f.write(content)
+                    print(f"✅ Fixed potential spinner issue in {os.path.basename(js_file)}")
+        except Exception as e:
+            print(f"⚠️ Warning: Error fixing spinner issue in {js_file}: {e}")
+    
+    # Also add a spinner fix script directly in the assets directory
+    spinner_fix_script = """
+// Spinner fix script
+document.addEventListener('DOMContentLoaded', function() {
+  // Hide spinners after a timeout
+  setTimeout(function() {
+    var spinners = document.querySelectorAll('.spinner, .spinner_centered, [class*="spinner"]');
+    spinners.forEach(function(spinner) {
+      if (spinner) {
+        spinner.style.display = 'none';
+      }
+    });
+    
+    // Try to show content
+    var contentEls = document.querySelectorAll('#content, .content, [id*="content"]');
+    contentEls.forEach(function(el) {
+      if (el) {
+        el.style.display = 'block';
+      }
+    });
+  }, 1500);
+});
+"""
+    
+    # Create the spinner fix script
+    assets_dir = os.path.join(report_dir, "assets")
+    os.makedirs(assets_dir, exist_ok=True)
+    
+    with open(os.path.join(assets_dir, "spinner-fix.js"), "w") as f:
+        f.write(spinner_fix_script)
+    
+    # Add the spinner fix script to index.html
+    index_file = os.path.join(report_dir, "index.html")
+    if os.path.exists(index_file):
+        try:
+            with open(index_file, 'r', encoding='utf-8') as f:
+                content = f.read()
+            
+            if '</head>' in content and 'spinner-fix.js' not in content:
+                new_content = content.replace(
+                    '</head>', 
+                    f'<script src="assets/spinner-fix.js?v={get_current_timestamp()}"></script></head>'
+                )
+                
+                with open(index_file, 'w', encoding='utf-8') as f:
+                    f.write(new_content)
+                print("✅ Added spinner fix script to index.html")
+        except Exception as e:
+            print(f"⚠️ Warning: Error adding spinner fix to index.html: {e}")
+    
+    print("✅ Added fixes for potential infinite spinner issues")
+
+
 def add_cache_busting_to_html(report_dir: str, timestamp: int) -> None:
-    """Add cache-busting script to HTML files.
+    """Add cache-busting script to HTML files without redirects.
     
     Args:
         report_dir: Path to the Allure report directory.
@@ -352,9 +472,8 @@ def add_cache_busting_to_html(report_dir: str, timestamp: int) -> None:
     """
     html_files = glob.glob(os.path.join(report_dir, "**", "*.html"), recursive=True)
     
-    # Add version parameter to the script URL to prevent caching of the JS file itself,
-    # but don't add timestamp to the meta tags to prevent page redirect issues
-    head_tag_with_meta = f'<head><meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate"><script src="assets/force-refresh.js?v={timestamp}"></script>'
+    # Add the script tag but no redirection
+    head_tag_with_meta = f'<head><meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate"><script src="assets/force-refresh.js?v={timestamp}"></script><script src="assets/spinner-fix.js?v={timestamp}"></script>'
     
     for html_file in html_files:
         with open(html_file, 'r', encoding='utf-8') as f:
@@ -367,7 +486,7 @@ def add_cache_busting_to_html(report_dir: str, timestamp: int) -> None:
             with open(html_file, 'w', encoding='utf-8') as f:
                 f.write(new_content)
     
-    print(f"✅ Added cache-busting to HTML files")
+    print(f"✅ Added scripts to HTML files")
 
 
 def create_nojekyll_file(report_dir: str) -> None:
@@ -520,6 +639,8 @@ def main() -> int:
     # Apply customizations
     fix_date_formats_in_json(report_dir)
     fix_title_date_format(report_dir)
+    fix_meta_tags_in_html(report_dir)
+    fix_spinner_issue(report_dir)
     create_cache_busting_script(report_dir, timestamp)
     add_cache_headers(report_dir)
     add_branch_info(report_dir)
