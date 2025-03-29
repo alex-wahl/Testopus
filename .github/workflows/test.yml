@@ -40,36 +40,51 @@ concurrency:
   group: "pages"
   cancel-in-progress: false
 
+# Global environment variables
+env:
+  PYTHON_VERSION: '3.12'
+  ALLURE_VERSION: '2.24.0'
+  DOCKER_TAG: 'testopus:latest'
+  REPORT_DIR: 'reports/allure-report'
+  RESULTS_DIR: 'reports/allure-results'
+  HISTORY_DIR: 'reports/allure-history'
+  BRANCH_NAME: ${{ github.head_ref || github.ref_name }}
+  # Debug settings
+  DEBUG_MODE: ${{ github.event.inputs.debug_mode == 'true' || false }}
+  # Docker environment settings
+  PYTHONPATH: /app
+  DOCKER_ENV: true
+  TZ: Europe/Berlin
+
 jobs:
-  # Setup job
-  setup:
+  test:
     runs-on: ubuntu-latest
-    outputs:
-      test_suite: ${{ github.event.inputs.test_suite || 'all' }}
-      debug_mode: ${{ github.event.inputs.debug_mode || 'false' }}
-      custom_flags: ${{ github.event.inputs.custom_flags }}
 
     steps:
-      - uses: actions/checkout@v4
+      # Setup phase
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-      - name: Set up Python
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
         uses: actions/setup-python@v5
         with:
-          python-version: '3.12'
+          python-version: ${{ env.PYTHON_VERSION }}
 
-      - name: Install Hatch
-        run: pip install hatch
-
-      - name: Install CI dependencies
-        run: pip install -r ci/requirements.txt
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install hatch
+          pip install -r ci/requirements.txt
 
       # Prepare directories
       - name: Prepare directories
         run: |
-          mkdir -p reports/{allure-results,html,junit,screenshots,allure-report,allure-history}
+          mkdir -p reports/{allure-results,html,junit,screenshots,allure-report,${{ env.HISTORY_DIR }}}
           chmod -R 777 reports
+          echo "Listing test directories:"
+          find tests -type f -name "test_*.py" | sort
 
-      # Setup Docker Buildx
+      # Configure Docker for efficient builds
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
@@ -82,7 +97,7 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-buildx-
 
-      # Build Docker image with better error handling
+      # Build Docker image
       - name: Build Docker image
         uses: docker/build-push-action@v5
         with:
@@ -90,135 +105,67 @@ jobs:
           file: ./docker/Dockerfile
           push: false
           load: true
-          tags: testopus:latest
+          tags: ${{ env.DOCKER_TAG }}
           cache-from: type=local,src=/tmp/.buildx-cache
           cache-to: type=local,dest=/tmp/.buildx-cache-new,mode=max
 
-      # Verify Docker image was built
-      - name: Verify Docker image
-        run: |
-          echo "Checking for Docker image..."
-          if ! docker images | grep -q testopus; then
-            echo "::warning::Docker image 'testopus' not found. Building again with debug output..."
-            docker build -t testopus:latest -f ./docker/Dockerfile .
-          else
-            echo "Docker image exists:"
-            docker images | grep testopus
-          fi
-
-      # Move cache for performance
+      # Optimize cache for next runs
       - name: Move cache
         run: |
           rm -rf /tmp/.buildx-cache
           mv /tmp/.buildx-cache-new /tmp/.buildx-cache
 
-      - name: List test directories
-        run: find tests -type f -name "test_*.py" | sort
-
-  # Run tests
-  test:
-    needs: setup
-    runs-on: ubuntu-latest
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-
-      - name: Install dependencies
+      # Test execution phase
+      - name: Run tests
+        id: run_tests
+        continue-on-error: true  # Continue workflow even if tests fail
         run: |
-          python -m pip install --upgrade pip
-          pip install -r ci/requirements.txt
+          # Set test directory based on workflow input
+          case "${{ github.event.inputs.test_suite }}" in
+            ui)
+              TEST_DIR="/app/tests/ui_tests/web"
+              REPORT_FILE="report_ui.xml"
+              ;;
+            api)
+              TEST_DIR="/app/tests/api_tests"
+              REPORT_FILE="report_api.xml"
+              ;;
+            internal)
+              TEST_DIR="/app/tests/internal_tests"
+              REPORT_FILE="report_internal.xml"
+              ;;
+            *)
+              TEST_DIR="/app/tests"
+              REPORT_FILE="report_all.xml"
+              ;;
+          esac
 
-      # Create CI directories
-      - name: Create CI directories
-        run: |
-          mkdir -p reports/{allure-results,html,junit,screenshots,allure-report,allure-history}
-          chmod -R 777 reports
+          # Run tests with Docker
+          echo "::group::Running tests with Docker"
+          docker compose -f docker/docker-compose.yml run --rm testopus \
+            --verbose -vv \
+            --alluredir=/app/${{ env.RESULTS_DIR }} \
+            --html=/app/reports/html/report.html \
+            --junitxml=/app/reports/junit/${REPORT_FILE} \
+            ${TEST_DIR} ${{ github.event.inputs.custom_flags }}
 
-      # Setup Docker Buildx
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+          # Save exit code for later
+          TEST_EXIT_CODE=$?
+          echo "test_exit_code=${TEST_EXIT_CODE}" >> $GITHUB_OUTPUT
+          echo "::endgroup::"
 
-      # Cache Docker layers
-      - name: Cache Docker layers
-        uses: actions/cache@v4
-        with:
-          path: /tmp/.buildx-cache
-          key: ${{ runner.os }}-buildx-${{ github.sha }}
-          restore-keys: |
-            ${{ runner.os }}-buildx-
+          exit ${TEST_EXIT_CODE}
 
-      # Build Docker image with local build fallback
-      - name: Build Docker image (with fallback)
-        run: |
-          # Try to use build-push-action
-          if ! docker images | grep -q testopus; then
-            echo "Building Docker image locally..."
-            docker build -t testopus:latest -f ./docker/Dockerfile .
-          fi
-
-      # Verify Docker image exists before running tests
-      - name: Verify Docker image
-        run: |
-          echo "Checking for Docker image..."
-          if ! docker images | grep -q testopus; then
-            echo "::error::Docker image 'testopus' not found. Cannot proceed with tests."
-            exit 1
-          else
-            echo "Docker image exists:"
-            docker images | grep testopus
-          fi
-
-      # Debug Docker system information
-      - name: Docker debug info
-        run: |
-          docker info
-          docker version
-
-      # Try to run a simple Docker container first
-      - name: Test Docker functionality
-        run: |
-          echo "Testing Docker with a simple container..."
-          docker run --rm hello-world
-
-          echo "Testing access to testopus image..."
-          docker images | grep testopus || echo "Testopus image not found"
-
-      # Skip Docker-based tests in CI for now
-      - name: Create mock test results
-        run: |
-          echo "::warning::Skipping Docker-based tests due to potential Docker issues in CI."
-          mkdir -p reports/allure-results/sample
-          cat > reports/allure-results/sample/result.json << EOF
-          {
-            "status": "passed",
-            "name": "Sample test",
-            "labels": [
-              { "name": "suite", "value": "Sample Suite" },
-              { "name": "testClass", "value": "SampleTest" }
-            ],
-            "start": 1585124589625,
-            "stop": 1585124599625
-          }
-          EOF
-
-      # Clean up containers
-      - name: Clean up containers
+      # Debug: List generated report files
+      - name: List report files
         if: always()
         run: |
-          docker ps -a
-          docker compose -f docker/docker-compose.yml down --remove-orphans || true
-
-      # Verify test artifacts
-      - name: Verify test artifacts
-        if: always()
-        run: |
+          echo "=== Workspace contents ==="
+          ls -la
+          echo "=== Reports directory ==="
+          ls -la reports/ || echo "No reports directory"
           echo "=== Allure results ==="
-          ls -la reports/allure-results/ || echo "No allure-results directory"
+          ls -la ${{ env.RESULTS_DIR }}/ || echo "No allure-results directory"
           echo "=== HTML report ==="
           ls -la reports/html/ || echo "No html directory"
           echo "=== JUnit reports ==="
@@ -226,110 +173,87 @@ jobs:
           echo "=== Screenshots ==="
           ls -la reports/screenshots/ || echo "No screenshots directory"
 
-      # Create artifacts directory if it doesn't exist
-      - name: Create artifacts directory
+      # Clean up Docker containers
+      - name: Clean up containers
         if: always()
-        run: mkdir -p reports/{allure-results,html,junit,screenshots,allure-report,allure-history}
+        run: docker compose -f docker/docker-compose.yml down --remove-orphans
 
-      # Upload test results as artifacts
-      - name: Upload test results
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: test-results
-          path: reports/
-          retention-days: 1  # Short retention as these will be processed by report job
-
-  # Generate reports
-  report:
-    needs: [setup, test]
-    runs-on: ubuntu-latest
-    if: always()
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-
-      - name: Install CI dependencies
-        run: pip install -r ci/requirements.txt
-
-      # Download test results
-      - name: Download test results
-        uses: actions/download-artifact@v4
-        with:
-          name: test-results
-          path: reports/
-
-      # Create empty history if needed
-      - name: Create empty history if needed
-        run: |
-          mkdir -p reports/allure-history/history
-          if [ ! -d "reports/allure-history" ] || [ -z "$(ls -A reports/allure-history)" ]; then
-            echo "Creating empty history placeholder files"
-            echo "{}" > reports/allure-history/history.json
-            echo "{}" > reports/allure-history/categories-trend.json
-            echo "{}" > reports/allure-history/duration-trend.json
-            echo "{}" > reports/allure-history/retries-trend.json
-            echo "{}" > reports/allure-history/history-trend.json
-          fi
-
+      # Report generation phase
       # Download previous test history
       - name: Download previous test history
+        if: always()
         uses: actions/download-artifact@v4
         continue-on-error: true
         with:
           name: allure-history
-          path: reports/allure-history
+          path: ${{ env.HISTORY_DIR }}
 
-      # Install allure-commandline
+      # Install Allure for report generation
       - name: Set up Allure
+        if: always()
         run: |
-          wget -O allure-commandline.zip https://repo.maven.apache.org/maven2/io/qameta/allure/allure-commandline/2.24.0/allure-commandline-2.24.0.zip
-          unzip allure-commandline.zip
+          wget -O allure-commandline.zip https://repo.maven.apache.org/maven2/io/qameta/allure/allure-commandline/${{ env.ALLURE_VERSION }}/allure-commandline-${{ env.ALLURE_VERSION }}.zip
+          unzip -q allure-commandline.zip
 
-      # Generate Allure report
+      # Generate Allure report with history
       - name: Generate Allure Report
+        if: always()
         run: |
-          # Copy history to results directory
-          if [ -d "reports/allure-history" ] && [ "$(ls -A reports/allure-history)" ]; then
-            echo "Copying previous history to results"
-            mkdir -p reports/allure-results/history
-            cp -r reports/allure-history/* reports/allure-results/history/ || true
+          # Check if we have results
+          if [ -d "${{ env.RESULTS_DIR }}" ] && [ -n "$(find ${{ env.RESULTS_DIR }} -type f 2>/dev/null)" ]; then
+            echo "Allure results found, proceeding with regular report"
+
+            # Copy history to results directory if it exists
+            if [ -d "${{ env.HISTORY_DIR }}" ] && [ -n "$(find ${{ env.HISTORY_DIR }} -type f 2>/dev/null)" ]; then
+              echo "Copying history to results directory"
+              mkdir -p ${{ env.RESULTS_DIR }}/history
+              cp -r ${{ env.HISTORY_DIR }}/* ${{ env.RESULTS_DIR }}/history/ 2>/dev/null || true
+            fi
+
+            # Generate the report
+            echo "Generating Allure report"
+            ./allure-${{ env.ALLURE_VERSION }}/bin/allure generate ${{ env.RESULTS_DIR }} -o ${{ env.REPORT_DIR }} --clean
+
+            # Check if report generation was successful
+            if [ $? -ne 0 ]; then
+              echo "::warning::Allure report generation failed, creating dummy report"
+              python3 ci/scripts/customize_allure_report.py --dummy --branch "${{ env.BRANCH_NAME }}"
+            else
+              # Customize the report
+              echo "Customizing Allure report"
+              python3 ci/scripts/customize_allure_report.py --history --branch "${{ env.BRANCH_NAME }}"
+            fi
+          else
+            echo "::warning::No Allure results found, creating a dummy report"
+            python3 ci/scripts/customize_allure_report.py --dummy --branch "${{ env.BRANCH_NAME }}"
           fi
 
-          # Generate the report
-          ./allure-2.24.0/bin/allure generate reports/allure-results -o reports/allure-report --clean
-
-          # Customize the report
-          python3 ci/scripts/customize_allure_report.py --history
-
-          # Save history for future runs
-          mkdir -p reports/allure-history
-          if [ -d "reports/allure-report/history" ]; then
-            echo "Saving history for future runs"
-            cp -r reports/allure-report/history/* reports/allure-history/ || true
+          # Preserve history for future runs
+          echo "Preserving history for future runs"
+          mkdir -p ${{ env.HISTORY_DIR }}
+          if [ -d "${{ env.REPORT_DIR }}/history" ]; then
+            cp -r ${{ env.REPORT_DIR }}/history/* ${{ env.HISTORY_DIR }}/ 2>/dev/null || true
           fi
         env:
-          ALLURE_REPORT_DIR: reports/allure-report
-          ALLURE_BRANCH: ${{ github.head_ref || github.ref_name }}
-          ALLURE_PRESERVE_HISTORY: true
+          ALLURE_REPORT_DIR: ${{ env.REPORT_DIR }}
+          ALLURE_PRESERVE_HISTORY: "true"
           GITHUB_REF: ${{ github.ref }}
           GITHUB_HEAD_REF: ${{ github.head_ref }}
 
-      # Upload test history
+      # Artifact publishing phase
+      # Upload history for future runs
       - name: Upload test history
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: allure-history
-          path: reports/allure-history/
+          path: ${{ env.HISTORY_DIR }}
           retention-days: 90
+          if-no-files-found: warn
 
-      # Upload test reports
+      # Upload all test artifacts
       - name: Upload test reports
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: test-reports
@@ -337,66 +261,52 @@ jobs:
             reports/html/
             reports/junit/
             reports/screenshots/
-            reports/allure-results/
-            reports/allure-report/
+            ${{ env.RESULTS_DIR }}/
+            ${{ env.REPORT_DIR }}/
           retention-days: 90
 
-      # Publish test results
+      # Publish test results to GitHub Actions
       - name: Publish Test Results
+        if: always()
         uses: EnricoMi/publish-unit-test-result-action@v2
-        if: false  # Disabled for now since we're not running actual tests
         with:
           files: reports/junit/report*.xml
           check_name: Test Results
 
-  # Deploy to GitHub Pages
-  deploy:
-    needs: report
-    runs-on: ubuntu-latest
-    if: always()
-
-    steps:
-      - uses: actions/checkout@v4
-
-      # Download report
-      - name: Download report
-        uses: actions/download-artifact@v4
-        with:
-          name: test-reports
-          path: reports/
-
-      # Upload GitHub Pages artifact
+      # GitHub Pages deployment
       - name: Upload GitHub Pages artifact
+        if: always()
         uses: actions/upload-pages-artifact@v3
         with:
-          path: reports/allure-report
+          path: ${{ env.REPORT_DIR }}
           retention-days: 90
 
-      # Deploy to reporting branch
+      # Deploy to GitHub Pages via branch
       - name: Deploy to reporting branch
+        if: always()
         uses: peaceiris/actions-gh-pages@v3
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./reports/allure-report
+          publish_dir: ./${{ env.REPORT_DIR }}
           publish_branch: reporting
           force_orphan: true
           enable_jekyll: false
-          keep_files: false
           cname: ${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}
           user_name: "github-actions[bot]"
           user_email: "github-actions[bot]@users.noreply.github.com"
           commit_message: "docs: update Allure report [skip ci]"
 
-      # Comment on PR with report links
+      # Add PR comment with report links
       - name: Comment PR with Report Links
-        if: github.event_name == 'pull_request'
+        if: always() && github.event_name == 'pull_request'
         uses: actions/github-script@v7
         with:
           script: |
             const artifactUrl = `${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}`;
-            let pagesUrl = `https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}`;
+            const pagesUrl = `https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}`;
+            const testStatus = `${{ steps.run_tests.outcome }}` === 'success' ? '✅ Tests passed' : '❌ Tests failed';
 
-            const comment = `### Test Results
+            const comment = `### ${testStatus}
 
             #### Report Links:
             - [Download Test Reports](${artifactUrl})
