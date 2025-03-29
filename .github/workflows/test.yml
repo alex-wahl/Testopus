@@ -188,6 +188,23 @@ jobs:
           name: allure-history
           path: ${{ env.HISTORY_DIR }}
 
+      # Ensure history directory exists with initial files
+      - name: Initialize history directory
+        if: always()
+        run: |
+          mkdir -p ${{ env.HISTORY_DIR }}/history
+          # Create initial history files if they don't exist
+          if [ ! -f "${{ env.HISTORY_DIR }}/history/history.json" ]; then
+            echo "{}" > ${{ env.HISTORY_DIR }}/history/history.json
+            echo "Created initial history.json"
+          fi
+          for file in history-trend.json categories-trend.json duration-trend.json retries-trend.json; do
+            if [ ! -f "${{ env.HISTORY_DIR }}/history/$file" ]; then
+              echo "[]" > ${{ env.HISTORY_DIR }}/history/$file
+              echo "Created initial $file"
+            fi
+          done
+
       # Install Allure for report generation
       - name: Set up Allure
         if: always()
@@ -274,6 +291,10 @@ jobs:
           check_name: Test Results
 
       # GitHub Pages deployment
+      - name: Setup GitHub Pages
+        if: always()
+        uses: actions/configure-pages@v4
+
       - name: Upload GitHub Pages artifact
         if: always()
         uses: actions/upload-pages-artifact@v3

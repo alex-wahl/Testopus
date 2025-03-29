@@ -1,5 +1,24 @@
 // Fix for 404 errors when test results are missing
 document.addEventListener('DOMContentLoaded', function() {
+    // Handle 401 errors for GitHub Pages
+    if (document.title.includes('401') ||
+        document.body.innerText.includes('401') ||
+        (document.body.innerText.includes('Not found') && document.body.innerText.includes('401'))) {
+        console.warn('Detected 401 error, redirecting to base path');
+
+        // Redirect to the base path of the site
+        const currentPath = window.location.pathname;
+        const segments = currentPath.split('/').filter(Boolean);
+
+        // If we're on a subpath, redirect to the repository root
+        if (segments.length > 1) {
+            const newPath = '/' + segments[0];
+            console.log('Redirecting from', currentPath, 'to', newPath);
+            window.location.href = window.location.origin + newPath;
+            return;
+        }
+    }
+
     // Intercept AJAX requests to detect 404 errors for test results
     var originalFetch = window.fetch;
     window.fetch = function(url, options) {
