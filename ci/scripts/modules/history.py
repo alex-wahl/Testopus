@@ -1,24 +1,22 @@
 #!/usr/bin/env python3
 """History preservation module for Allure report customization.
 
-This module provides functions for preserving test history between runs,
-ensuring trend data persists across test executions in CI/CD pipelines.
+This module provides functionality to preserve history data between Allure report generations,
+ensuring test statistics and trends are maintained across multiple runs.
 """
 
+import glob
 import logging
 import os
 import shutil
+import sys
 from pathlib import Path
 
-# Handle both relative imports for package usage and direct imports for script execution
-try:
-    from ..utils.file_utils import ensure_dir_exists
-except ImportError:
-    # When run directly
-    import sys
+# Set up Python path for imports
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent.parent))
 
-    sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-    from utils.file_utils import ensure_dir_exists
+# Import modules from the project
+from ci.scripts.utils.file_utils import ensure_dir_exists  # noqa: E402
 
 # Set up logging
 logger = logging.getLogger("allure-customizer.history")
@@ -73,9 +71,7 @@ def preserve_history(report_dir: str) -> None:
     logger.info(f"Using history storage directory: {history_storage}")
 
     if DRY_RUN:
-        logger.info(
-            f"DRY-RUN: Would manage history between {history_storage} and {history_dir}"
-        )
+        logger.info(f"DRY-RUN: Would manage history between {history_storage} and {history_dir}")
         return
 
     # Create directories if they don't exist

@@ -57,17 +57,11 @@ def fix_missing_test_results(report_dir: str) -> None:
 
     try:
         # Load 404 error handling JavaScript from external file
-        js_dir = os.path.join(
-            os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "js"
-        )
+        js_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "js")
         fix_404_js_path = os.path.join(js_dir, "fix_404_errors.js")
 
         if not os.path.exists(fix_404_js_path):
-            logger.warning(
-                "404 error handling JavaScript file not found at {0}".format(
-                    fix_404_js_path
-                )
-            )
+            logger.warning("404 error handling JavaScript file not found at {0}".format(fix_404_js_path))
             return
 
         # Read the file
@@ -80,9 +74,7 @@ def fix_missing_test_results(report_dir: str) -> None:
 
         # Add the script to the head section
         if "</head>" in content:
-            script_tag = '<script type="text/javascript">\n{0}\n</script>'.format(
-                fix_404_script
-            )
+            script_tag = '<script type="text/javascript">\n{0}\n</script>'.format(fix_404_script)
             content = content.replace("</head>", script_tag + "</head>")
 
             with open(index_file, "w", encoding="utf-8") as f:

@@ -115,11 +115,7 @@ def update_environment_properties(report_dir: str, branch: str) -> None:
         branch: Branch name to add
     """
     if _dry_run:
-        logger.info(
-            "DRY RUN: Would update environment properties with branch {0}".format(
-                branch
-            )
-        )
+        logger.info("DRY RUN: Would update environment properties with branch {0}".format(branch))
         return
 
     env_file = os.path.join(report_dir, ENV_PROPERTIES_FILE)
@@ -164,9 +160,7 @@ def update_environment_json(report_dir: str, branch: str) -> None:
     import json
 
     if _dry_run:
-        logger.info(
-            "DRY RUN: Would update environment.json with branch {0}".format(branch)
-        )
+        logger.info("DRY RUN: Would update environment.json with branch {0}".format(branch))
         return
 
     # Find environment.json files
@@ -241,14 +235,10 @@ def update_environment_html(report_dir: str, branch: str) -> None:
                 elif "<body>" in content:
                     # Inject after body tag
                     # Break long line into shorter parts
-                    div_start = (
-                        '\\1\n<div style="position:fixed;top:0;right:0;padding:5px;'
-                    )
+                    div_start = '\\1\n<div style="position:fixed;top:0;right:0;padding:5px;'
                     div_style = 'background:#f8f8f8;z-index:1000;font-size:12px;">'
                     div_content = "Branch: {0}</div>".format(branch)
-                    new_content = re.sub(
-                        r"(<body>)", div_start + div_style + div_content, content
-                    )
+                    new_content = re.sub(r"(<body>)", div_start + div_style + div_content, content)
                 else:
                     # Skip if no injection point found
                     continue
@@ -257,9 +247,7 @@ def update_environment_html(report_dir: str, branch: str) -> None:
                     if write_file(html_file, new_content):
                         updated_count += 1
         except Exception as e:
-            logger.warning(
-                "Error updating HTML file {0}: {1}".format(html_file, str(e))
-            )
+            logger.warning("Error updating HTML file {0}: {1}".format(html_file, str(e)))
 
     logger.info("Updated {0} HTML files with branch information".format(updated_count))
 

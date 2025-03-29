@@ -8,17 +8,14 @@ configuring caching behavior when reports are served via HTTP.
 import glob
 import logging
 import os
+import sys
 from pathlib import Path
 
-# Handle both relative imports for package usage and direct imports for script execution
-try:
-    from ..utils.constants import CACHE_CONTROL_HEADERS, CACHE_CONTROL_META
-except ImportError:
-    # When run directly
-    import sys
+# Set up Python path for imports
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent.parent))
 
-    sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-    from utils.constants import CACHE_CONTROL_HEADERS, CACHE_CONTROL_META
+# Import modules from the project
+from ci.scripts.utils.constants import CACHE_CONTROL_HEADERS, CACHE_CONTROL_META  # noqa: E402
 
 # Set up logging
 logger = logging.getLogger("allure-customizer.cache-control")
@@ -110,9 +107,7 @@ def remove_problematic_elements(report_dir: str) -> None:
         report_dir: Path to the Allure report directory.
     """
     if DRY_RUN:
-        logger.info(
-            f"DRY-RUN: Would remove problematic elements from HTML files in {report_dir}"
-        )
+        logger.info(f"DRY-RUN: Would remove problematic elements from HTML files in {report_dir}")
         return
 
     # Load spinner fix CSS template
@@ -146,18 +141,14 @@ def remove_problematic_elements(report_dir: str) -> None:
 
             # Remove meta refresh tags
             if '<meta http-equiv="refresh"' in content:
-                new_content = content.replace(
-                    '<meta http-equiv="refresh"', "<!-- removed refresh -->"
-                )
+                new_content = content.replace('<meta http-equiv="refresh"', "<!-- removed refresh -->")
                 if new_content != content:
                     content = new_content
                     modified = True
 
             # Add CSS to ensure spinners don't stay visible
             if "</head>" in content and "spinner-fix-styles" not in content:
-                spinner_style_block = (
-                    f'<style id="spinner-fix-styles">\n{spinner_css}\n</style>\n</head>'
-                )
+                spinner_style_block = f'<style id="spinner-fix-styles">\n{spinner_css}\n</style>\n</head>'
                 new_content = content.replace("</head>", spinner_style_block)
                 if new_content != content:
                     content = new_content

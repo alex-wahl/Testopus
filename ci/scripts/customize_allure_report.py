@@ -60,14 +60,10 @@ def parse_args():
     Returns:
         argparse.Namespace: Parsed arguments
     """
-    parser = argparse.ArgumentParser(
-        description="Customize Allure reports with additional features."
-    )
+    parser = argparse.ArgumentParser(description="Customize Allure reports with additional features.")
     parser.add_argument(
         "--report-dir",
-        help="Path to the Allure report directory. Defaults to {0}".format(
-            DEFAULT_REPORT_DIR
-        ),
+        help="Path to the Allure report directory. Defaults to {0}".format(DEFAULT_REPORT_DIR),
     )
     parser.add_argument(
         "--dummy",
@@ -80,13 +76,9 @@ def parse_args():
         help="Print what would be done without making changes",
     )
     parser.add_argument("--branch", help="Specify branch name")
-    parser.add_argument(
-        "--history", action="store_true", help="Preserve history between runs"
-    )
+    parser.add_argument("--history", action="store_true", help="Preserve history between runs")
     parser.add_argument("--verbose", action="store_true", help="Enable verbose output")
-    parser.add_argument(
-        "--version", action="version", version="%(prog)s {0}".format(__version__)
-    )
+    parser.add_argument("--version", action="version", version="%(prog)s {0}".format(__version__))
 
     return parser.parse_args()
 
@@ -173,9 +165,7 @@ def main():
         logger.info("Fixed date formats")
 
     # Preserve history between runs
-    preserve_history_flag = (
-        args.history or os.environ.get(ENV_PRESERVE_HISTORY) == "true"
-    )
+    preserve_history_flag = args.history or os.environ.get(ENV_PRESERVE_HISTORY) == "true"
     if preserve_history_flag:
         logger.info("Preserving history between runs")
         if args.dry_run:

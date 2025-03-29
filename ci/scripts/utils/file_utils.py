@@ -123,9 +123,7 @@ def find_files(base_dir: str, pattern: str, recursive: bool = True) -> List[str]
         else:
             return glob.glob(os.path.join(base_dir, pattern), recursive=False)
     except Exception as e:
-        logger.error(
-            f"Error finding files in {base_dir} with pattern {pattern}: {str(e)}"
-        )
+        logger.error(f"Error finding files in {base_dir} with pattern {pattern}: {str(e)}")
         return []
 
 
