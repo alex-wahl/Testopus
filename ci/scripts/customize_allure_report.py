@@ -334,46 +334,30 @@ def update_index_html(report_dir: str, branch: str) -> None:
         return
         
     try:
+        # Load branch info JavaScript from external file
+        js_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "js")
+        branch_js_path = os.path.join(js_dir, "branch_info.js")
+        
+        if not os.path.exists(branch_js_path):
+            logger.warning(f"Branch info JavaScript file not found at {branch_js_path}")
+            return
+        
+        # Read the file and replace branch placeholder
+        with open(branch_js_path, 'r', encoding='utf-8') as f:
+            branch_script = f.read().replace('{{BRANCH_NAME}}', branch)
+        
+        # Read the HTML file
         with open(index_file, 'r', encoding='utf-8') as f:
             content = f.read()
         
-        # Make data-branch attribute available and ensure 404 doesn't occur on tab navigation
+        # Add the script to the head section
         if '</head>' in content:
-            fix_tabs_script = """
-    <script type="text/javascript">
-    // Fix for branch tab and 404 errors
-    document.addEventListener('DOMContentLoaded', function() {
-        // Add branch data attribute to body
-        document.body.setAttribute('data-branch', '%s');
-        
-        // Fix 404 errors on tab navigation
-        var handleAnchorClick = function(e) {
-            var href = e.target.getAttribute('href');
-            if (href && href.indexOf('#') === 0) {
-                var targetTab = document.querySelector(href);
-                if (!targetTab) {
-                    e.preventDefault();
-                    console.warn('Tab not found:', href);
-                    // Redirect to first available tab instead
-                    var firstTab = document.querySelector('.allure-tabs a');
-                    if (firstTab) firstTab.click();
-                }
-            }
-        };
-        
-        // Add listeners to tab navigation links
-        var tabLinks = document.querySelectorAll('.allure-tabs a');
-        tabLinks.forEach(function(link) {
-            link.addEventListener('click', handleAnchorClick);
-        });
-    });
-    </script>
-""" % branch
-            content = content.replace('</head>', fix_tabs_script + '</head>')
+            script_tag = f"<script type=\"text/javascript\">\n{branch_script}\n</script>"
+            content = content.replace('</head>', script_tag + '</head>')
             
             with open(index_file, 'w', encoding='utf-8') as f:
                 f.write(content)
-            logger.info(f"Updated index.html with branch info and tab navigation fix")
+            logger.info(f"Updated index.html with branch info script")
         else:
             logger.warning("Could not find </head> in index.html")
     except Exception as e:
@@ -886,59 +870,26 @@ def fix_missing_test_results(report_dir: str) -> None:
         return
         
     try:
+        # Load 404 error handling JavaScript from external file
+        js_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "js")
+        fix_404_js_path = os.path.join(js_dir, "fix_404_errors.js")
+        
+        if not os.path.exists(fix_404_js_path):
+            logger.warning(f"404 error handling JavaScript file not found at {fix_404_js_path}")
+            return
+        
+        # Read the file
+        with open(fix_404_js_path, 'r', encoding='utf-8') as f:
+            fix_404_script = f.read()
+        
+        # Read the HTML file
         with open(index_file, 'r', encoding='utf-8') as f:
             content = f.read()
         
-        # Add script to handle missing test results
+        # Add the script to the head section
         if '</head>' in content:
-            fix_404_script = """
-    <script type="text/javascript">
-    // Fix for 404 errors when test results are missing
-    document.addEventListener('DOMContentLoaded', function() {
-        // Intercept AJAX requests to detect 404 errors for test results
-        var originalFetch = window.fetch;
-        window.fetch = function(url, options) {
-            return originalFetch(url, options).then(function(response) {
-                // If request is for a test result and fails with 404
-                if (response.status === 404 && url.includes('/data/test-cases/')) {
-                    console.warn('Test result not found:', url);
-                    
-                    // Create a minimal valid test result to prevent UI errors
-                    return new Response(JSON.stringify({
-                        uid: url.split('/').pop(),
-                        name: 'Test result not available',
-                        status: 'unknown',
-                        time: { start: 0, stop: 0, duration: 0 },
-                        statusDetails: { 
-                            message: 'This test result is no longer available in the report.',
-                            trace: 'The test data may have been removed or the ID changed between test runs.' 
-                        }
-                    }), {
-                        status: 200,
-                        headers: { 'Content-Type': 'application/json' }
-                    });
-                }
-                return response;
-            });
-        };
-        
-        // Also handle direct navigation to test cases that don't exist
-        var handleMissingTest = function(e) {
-            if (e.target.classList.contains('test-case')) {
-                var uid = e.target.getAttribute('href').split('/').pop();
-                if (!document.querySelector('[data-uid="' + uid + '"]')) {
-                    e.preventDefault();
-                    alert('Test result not available. The test may have been removed or renamed in a recent run.');
-                }
-            }
-        };
-        
-        // Add click handler to test-result links
-        document.addEventListener('click', handleMissingTest, true);
-    });
-    </script>
-"""
-            content = content.replace('</head>', fix_404_script + '</head>')
+            script_tag = f"<script type=\"text/javascript\">\n{fix_404_script}\n</script>"
+            content = content.replace('</head>', script_tag + '</head>')
             
             with open(index_file, 'w', encoding='utf-8') as f:
                 f.write(content)
