@@ -8,5 +8,6 @@ services:
     environment:
       - PYTHONPATH=/app
       - DOCKER_ENV=true
-    command: test:run
+    # Run with appropriate flags for Allure reporting
+    command: --alluredir=reports/allure-results --html=reports/html/report.html tests
     shm_size: 2gb  

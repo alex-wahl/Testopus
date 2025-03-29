@@ -98,6 +98,10 @@ dependencies = [
 [tool.hatch.envs.api.scripts]
 run = "pytest {args:tests/api_tests}"
 
+# Build configuration for wheel - fixes "Unable to determine which files to ship" error
+[tool.hatch.build.targets.wheel]
+packages = ["fixtures", "tests", "utils", "core", "config"]
+
 # Docs environment - commented out until needed
 # [tool.hatch.envs.docs]
 # dependencies = [

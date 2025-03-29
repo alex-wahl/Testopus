@@ -100,13 +100,13 @@ jobs:
       - name: Run tests
         run: |
           if [ "${{ github.event.inputs.test_suite }}" = "ui" ]; then
-            docker compose -f docker/docker-compose.yml run --rm testopus ui:web ${{ github.event.inputs.custom_flags }}
+            docker compose -f docker/docker-compose.yml run --rm testopus tests/ui_tests/web ${{ github.event.inputs.custom_flags }}
           elif [ "${{ github.event.inputs.test_suite }}" = "api" ]; then
-            docker compose -f docker/docker-compose.yml run --rm testopus api:run ${{ github.event.inputs.custom_flags }}
+            docker compose -f docker/docker-compose.yml run --rm testopus tests/api_tests ${{ github.event.inputs.custom_flags }}
           elif [ "${{ github.event.inputs.test_suite }}" = "internal" ]; then
-            docker compose -f docker/docker-compose.yml run --rm testopus test:internal ${{ github.event.inputs.custom_flags }}
+            docker compose -f docker/docker-compose.yml run --rm testopus tests/internal_tests ${{ github.event.inputs.custom_flags }}
           else
-            docker compose -f docker/docker-compose.yml run --rm testopus test:run-all-reports ${{ github.event.inputs.custom_flags }}
+            docker compose -f docker/docker-compose.yml run --rm testopus --alluredir=reports/allure-results --html=reports/html/report.html tests ${{ github.event.inputs.custom_flags }}
           fi
         env:
           DEBUG_MODE: ${{ github.event.inputs.debug_mode == 'true' }}
