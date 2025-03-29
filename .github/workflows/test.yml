@@ -148,6 +148,15 @@ jobs:
           echo "=== Screenshots ==="
           ls -la reports/screenshots/ || echo "No screenshots directory"
       
+      # Download previous test history
+      - name: Download previous test history
+        if: always()
+        uses: actions/download-artifact@v3
+        continue-on-error: true  # Continue if no history exists yet
+        with:
+          name: allure-history
+          path: reports/allure-history
+      
       # Install allure-commandline for report generation
       - name: Set up Allure
         if: always()
@@ -163,6 +172,15 @@ jobs:
             # Set timezone to Berlin
             export TZ=Europe/Berlin
             
+            # Create history directory in results if history exists
+            if [ -d "reports/allure-history" ] && [ "$(ls -A reports/allure-history)" ]; then
+              echo "Copying previous history to results"
+              mkdir -p reports/allure-results/history
+              cp -r reports/allure-history/* reports/allure-results/history/ || true
+            else
+              echo "No previous history found"
+            fi
+            
             # Generate the report
             ./allure-2.24.0/bin/allure generate reports/allure-results -o reports/allure-report --clean
             
@@ -172,7 +190,7 @@ jobs:
               python3 ci/scripts/customize_allure_report.py --dummy
             else
               # Customize the report using our Python script
-              python3 ci/scripts/customize_allure_report.py
+              python3 ci/scripts/customize_allure_report.py --history
             fi
           else
             echo "No Allure results found, creating a dummy report"
@@ -182,8 +200,18 @@ jobs:
           ALLURE_REPORT_DIR: reports/allure-report
           ALLURE_CREATE_DUMMY: false
           ALLURE_BRANCH: ${{ github.head_ref || github.ref_name }}
+          ALLURE_PRESERVE_HISTORY: true
           GITHUB_REF: ${{ github.ref }}
           GITHUB_HEAD_REF: ${{ github.head_ref }}
+      
+      # Upload test history as a separate artifact to preserve between runs
+      - name: Upload test history
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: allure-history
+          path: reports/allure-history/
+          retention-days: 90  # Keep longer for better historical data
       
       # Upload test reports as artifacts
       - name: Upload test reports
@@ -197,7 +225,8 @@ jobs:
             reports/screenshots/
             reports/allure-results/
             reports/allure-report/
-            
+          retention-days: 90  # Increase retention period
+          
       # Optional: Publish test results
       - name: Publish Test Results
         if: always()
@@ -212,7 +241,7 @@ jobs:
         uses: actions/upload-pages-artifact@v3
         with:
           path: reports/allure-report
-          retention-days: 30
+          retention-days: 90  # Increase retention period to match history
       
       # For direct branch upload - GitHub Pages is configured to use the 'reporting' branch
       - name: Deploy to reporting branch

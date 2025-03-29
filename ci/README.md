@@ -66,6 +66,7 @@ This is the main script for customizing Allure reports to ensure consistent form
 - Fixes for dynamic content rendering
 - Creation of dummy reports when no tests run
 - GitHub Pages integration and optimization
+- Test history preservation across runs (30-90 day trends)
 
 **Usage:**
 ```bash
@@ -78,6 +79,9 @@ python customize_allure_report.py --dummy
 # Specify a branch name explicitly
 python customize_allure_report.py --branch feature-branch
 
+# Disable history preservation
+python customize_allure_report.py --no-history
+
 # Test changes without applying them
 python customize_allure_report.py --dry-run
 ```
@@ -86,6 +90,7 @@ python customize_allure_report.py --dry-run
 - `ALLURE_REPORT_DIR` - Path to report directory (default: reports/allure-report)
 - `ALLURE_CREATE_DUMMY` - Create dummy report if "true" (default: "false")
 - `ALLURE_BRANCH` - Branch name to use in report
+- `ALLURE_PRESERVE_HISTORY` - Preserve test history if "true" (default: "true")
 
 ## Documentation
 

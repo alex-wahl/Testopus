@@ -18,11 +18,13 @@ Options:
     --dummy              Create a dummy report if no results available
     --branch BRANCH      Specify branch name (overrides auto-detection)
     --dry-run            Test run without making changes
+    --history            Preserve test history between runs
 
 Environment Variables:
     ALLURE_REPORT_DIR    Report directory (default: reports/allure-report)
     ALLURE_CREATE_DUMMY  Create dummy report if true (default: false)
     ALLURE_BRANCH        Branch name to use
+    ALLURE_PRESERVE_HISTORY Preserve test history between runs if true (default: true)
 """
 
 import os
@@ -37,16 +39,19 @@ import argparse
 from datetime import datetime
 from pathlib import Path
 from typing import Optional, List, Dict, Any, Union
+import shutil
+from distutils.dir_util import copy_tree
 
 # Set up logging
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s'
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
 )
 logger = logging.getLogger('allure-customizer')
 
 # Version for reproducibility in CI/CD logs
-__version__ = "1.1.0"
+__version__ = "1.3.0"
 
 # Make script idempotent (safe to run multiple times)
 DRY_RUN = False
@@ -803,6 +808,60 @@ def create_dummy_report(report_dir: str) -> None:
     logger.info("Created dummy report")
 
 
+def preserve_history(report_dir: str) -> None:
+    """Preserve Allure history between runs.
+    
+    This function handles preserving test execution history between runs by:
+    1. Looking for the 'history' directory in the report directory
+    2. Copying previous history from storage to the current report
+    3. After report generation, updating the history storage with new data
+    
+    Args:
+        report_dir: Path to the Allure report directory
+    """
+    # Define paths
+    history_dir = os.path.join(report_dir, "history")
+    history_storage = os.path.join(os.path.dirname(report_dir), "allure-history")
+    
+    # Skip in dry run mode
+    if DRY_RUN:
+        logger.info(f"DRY RUN: Would manage history between {history_storage} and {history_dir}")
+        return
+    
+    # Create history storage if it doesn't exist
+    os.makedirs(history_storage, exist_ok=True)
+    
+    if os.path.exists(history_dir):
+        # After report generation: Update the history storage with the new history
+        logger.info(f"Updating history storage at {history_storage}")
+        
+        # Create history storage dir if it doesn't exist
+        os.makedirs(history_storage, exist_ok=True)
+        
+        # Copy current history to storage
+        try:
+            copy_tree(history_dir, history_storage)
+            logger.info(f"Successfully updated history storage with data from {history_dir}")
+        except Exception as e:
+            logger.error(f"Error copying history to storage: {str(e)}")
+    else:
+        # Before report generation: Check if we have stored history to use
+        if os.path.exists(history_storage) and os.listdir(history_storage):
+            logger.info(f"Copying previous history from {history_storage} to current results")
+            
+            # Create history dir if it doesn't exist
+            os.makedirs(history_dir, exist_ok=True)
+            
+            # Copy stored history to current report
+            try:
+                copy_tree(history_storage, history_dir)
+                logger.info(f"Successfully copied history to {history_dir}")
+            except Exception as e:
+                logger.error(f"Error copying history to report directory: {str(e)}")
+        else:
+            logger.info("No previous history found")
+
+
 def parse_args():
     """Parse command line arguments.
     
@@ -818,6 +877,8 @@ def parse_args():
                       help='Specify branch name (overrides auto-detection)')
     parser.add_argument('--dry-run', action='store_true',
                       help='Test run without making changes')
+    parser.add_argument('--history', action='store_true', default=os.environ.get('ALLURE_PRESERVE_HISTORY', 'true').lower() == 'true',
+                      help='Preserve test history between runs')
     parser.add_argument('--version', action='version', version=f'%(prog)s {__version__}',
                       help='Show version information and exit')
     
@@ -838,6 +899,7 @@ def main() -> int:
     report_dir = args.report_dir
     create_dummy = args.dummy
     custom_branch = args.branch
+    preserve_test_history = args.history
     
     logger.info(f"Processing Allure report in {report_dir}...")
     
@@ -860,6 +922,11 @@ def main() -> int:
     
     # Apply customizations (in appropriate order to minimize file reads/writes)
     try:
+        # 0. Check for existing history to use before customization
+        if preserve_test_history:
+            # This first call checks if we need to copy history TO the report
+            preserve_history(report_dir)
+            
         # 1. Fix the date formats in various files
         fix_html_title_tags(report_dir)
         fix_js_date_formats(report_dir)
@@ -876,6 +943,11 @@ def main() -> int:
         
         # 5. Create .nojekyll file
         create_nojekyll_file(report_dir)
+        
+        # 6. Preserve history after customization
+        if preserve_test_history:
+            # This second call copies history FROM the report to storage
+            preserve_history(report_dir)
         
         logger.info("Allure report customization completed successfully!")
         return 0
