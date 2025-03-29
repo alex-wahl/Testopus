@@ -7,6 +7,7 @@ ensuring the reports are resilient against broken links and missing resources.
 
 import logging
 import os
+from typing import Dict, Optional
 
 # Set up logging
 logger = logging.getLogger("allure-customizer.error-handling")
@@ -36,6 +37,38 @@ def setup_error_handling() -> None:
     logger.info("Error handling configured")
 
 
+def get_js_script_content(script_name: str, replacements: Optional[Dict[str, str]] = None) -> str:
+    """Get the content of a JavaScript file with optional replacements.
+
+    Args:
+        script_name: Name of the JavaScript file
+        replacements: Dictionary of replacements to make in the script
+
+    Returns:
+        str: Content of the JavaScript file with replacements
+    """
+    script_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "js")
+    script_path = os.path.join(script_dir, script_name)
+
+    if not os.path.exists(script_path):
+        logger.warning(f"JavaScript file not found: {script_path}")
+        return ""
+
+    try:
+        with open(script_path, "r", encoding="utf-8") as f:
+            content = f.read()
+
+        # Apply replacements
+        if replacements:
+            for key, value in replacements.items():
+                content = content.replace(key, value)
+
+        return content
+    except Exception as e:
+        logger.error(f"Error reading JavaScript file {script_path}: {str(e)}")
+        return ""
+
+
 def fix_missing_test_results(report_dir: str) -> None:
     """Add JavaScript to handle 404 errors when test results are missing.
 
@@ -57,16 +90,11 @@ def fix_missing_test_results(report_dir: str) -> None:
 
     try:
         # Load 404 error handling JavaScript from external file
-        js_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "js")
-        fix_404_js_path = os.path.join(js_dir, "fix_404_errors.js")
+        fix_404_script = get_js_script_content("fix_404_errors.js")
 
-        if not os.path.exists(fix_404_js_path):
-            logger.warning("404 error handling JavaScript file not found at {0}".format(fix_404_js_path))
+        if not fix_404_script:
+            logger.warning("404 error handling JavaScript file not found, aborting")
             return
-
-        # Read the file
-        with open(fix_404_js_path, "r", encoding="utf-8") as f:
-            fix_404_script = f.read()
 
         # Read the HTML file
         with open(index_file, "r", encoding="utf-8") as f:
@@ -74,7 +102,7 @@ def fix_missing_test_results(report_dir: str) -> None:
 
         # Add the script to the head section
         if "</head>" in content:
-            script_tag = '<script type="text/javascript">\n{0}\n</script>'.format(fix_404_script)
+            script_tag = '<script type="text/javascript" id="error-handler">\n{0}\n</script>'.format(fix_404_script)
             content = content.replace("</head>", script_tag + "</head>")
 
             with open(index_file, "w", encoding="utf-8") as f:

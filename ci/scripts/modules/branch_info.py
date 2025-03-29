@@ -8,18 +8,17 @@ making it easier to identify which branch a report was generated from.
 import json
 import logging
 import os
-import re
 import subprocess
 import sys
 from pathlib import Path
-from typing import Optional, Tuple
+from typing import Dict, Optional, Tuple
 
 # Set up Python path for imports
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
 # Import from project
 from ci.scripts.utils.constants import ENV_GITHUB_HEAD_REF, ENV_GITHUB_REF, ENV_PROPERTIES_FILE  # noqa: E402
-from ci.scripts.utils.file_utils import find_files, read_file, write_file  # noqa: E402
+from ci.scripts.utils.file_utils import find_files  # noqa: E402
 
 # Set up logging
 logger = logging.getLogger("allure-customizer.branch-info")
@@ -81,25 +80,42 @@ def get_branch_from_git_command() -> Optional[str]:
     return None
 
 
+def _read_git_head_file(head_path: str) -> Optional[str]:
+    """Read and parse the .git/HEAD file.
+
+    Args:
+        head_path: Path to the HEAD file
+
+    Returns:
+        str or None: Branch name if found, None otherwise
+    """
+    if not os.path.exists(head_path):
+        return None
+
+    try:
+        with open(head_path, "r") as f:
+            content = f.read().strip()
+
+        if not content.startswith("ref: refs/heads/"):
+            return None
+
+        return content.replace("ref: refs/heads/", "")
+    except Exception:
+        return None
+
+
 def get_branch_from_git_head() -> Optional[str]:
     """Get branch name from .git/HEAD file.
 
     Returns:
         str or None: Branch name if found in .git/HEAD, None otherwise
     """
-    try:
-        git_dir = find_git_directory()
-        if git_dir:
-            head_path = os.path.join(git_dir, "HEAD")
-            if os.path.exists(head_path):
-                with open(head_path, "r") as f:
-                    content = f.read().strip()
-                    if content.startswith("ref: refs/heads/"):
-                        return content.replace("ref: refs/heads/", "")
-    except Exception:
-        pass
+    git_dir = find_git_directory()
+    if not git_dir:
+        return None
 
-    return None
+    head_path = os.path.join(git_dir, "HEAD")
+    return _read_git_head_file(head_path)
 
 
 def get_branch_from_cwd() -> str:
@@ -184,25 +200,26 @@ def update_environment_properties(report_dir: str, branch: str) -> None:
 
     # Read existing file
     lines = []
-    branch_line_exists = False
+    branch_entry = "Branch={0}\n".format(branch)
+    branch_exists = False
 
     with open(env_file, "r") as f:
         for line in f:
             if line.startswith("Branch="):
-                lines.append("Branch={0}\n".format(branch))
-                branch_line_exists = True
+                # Skip existing branch line, we'll add it at the top
+                branch_exists = True
             else:
                 lines.append(line)
 
-    # Add branch info if not present
-    if not branch_line_exists:
-        lines.append("Branch={0}\n".format(branch))
+    # Create new content with branch at the top
+    new_content = [branch_entry] + lines
 
     # Write updated file
     with open(env_file, "w") as f:
-        f.writelines(lines)
+        f.writelines(new_content)
 
-    logger.info("Updated environment.properties with branch {0}".format(branch))
+    action = "Updated" if branch_exists else "Added"
+    logger.info(f"{action} branch information in environment.properties with value {branch} at the top")
 
 
 def load_json_data(file_path: str) -> list:
@@ -237,35 +254,16 @@ def update_branch_in_json_data(data: list, branch: str) -> Tuple[list, bool]:
     Returns:
         tuple: Updated data and whether branch existed previously
     """
-    branch_exists = False
-    for item in data:
-        if item.get("name") == "Branch":
-            item["value"] = branch
-            branch_exists = True
-            break
+    # Remove any existing branch entry
+    new_data = [item for item in data if item.get("name") != "Branch"]
 
-    if not branch_exists:
-        data.append({"name": "Branch", "value": branch})
+    # Add branch as the first item
+    new_data.insert(0, {"name": "Branch", "value": branch})
 
-    return data, branch_exists
+    # Check if we actually made changes
+    branch_existed = len(data) != len(new_data)
 
-
-def save_json_data(file_path: str, data: list) -> bool:
-    """Save JSON data to a file.
-
-    Args:
-        file_path: Path to the JSON file
-        data: JSON data to save
-
-    Returns:
-        bool: True if successful, False otherwise
-    """
-    try:
-        with open(file_path, "w") as f:
-            json.dump(data, f, indent=2)
-        return True
-    except Exception:
-        return False
+    return new_data, branch_existed
 
 
 def update_environment_json(report_dir: str, branch: str) -> None:
@@ -279,147 +277,121 @@ def update_environment_json(report_dir: str, branch: str) -> None:
         logger.info("DRY RUN: Would update environment.json with branch {0}".format(branch))
         return
 
-    # Find environment.json files
-    env_json_files = find_files(report_dir, "environment.json")
-
-    for env_file in env_json_files:
+    # Find all environment JSON files
+    for env_json in find_files(report_dir, "environment.json"):
         try:
-            # Load JSON data
-            data = load_json_data(env_file)
+            # Load existing data
+            data = load_json_data(env_json)
 
-            # Update branch info in the data
-            data, _ = update_branch_in_json_data(data, branch)
+            # Update data with branch info
+            updated_data, existed = update_branch_in_json_data(data, branch)
 
-            # Save updated data
-            if save_json_data(env_file, data):
-                logger.info("Updated {0} with branch {1}".format(env_file, branch))
-            else:
-                logger.warning("Failed to update {0}".format(env_file))
+            # Write updated data
+            with open(env_json, "w") as f:
+                json.dump(updated_data, f)
+
+            action = "Updated" if existed else "Added"
+            logger.info("{0} branch info in {1}".format(action, env_json))
         except Exception as e:
-            logger.warning("Error updating environment.json: {0}".format(str(e)))
+            logger.error("Failed to update environment.json file {0}: {1}".format(env_json, str(e)))
 
 
-def should_update_html(content: Optional[str], branch: str) -> bool:
-    """Check if HTML content needs to be updated with branch information.
-
-    Args:
-        content: HTML content to check
-        branch: Branch name
-
-    Returns:
-        bool: True if content needs updating, False otherwise
-    """
-    return content is not None and not re.search(r"Branch:\s*" + re.escape(branch), content)
-
-
-def inject_branch_into_environment(content: str, branch: str) -> str:
-    """Inject branch info into the environment section of HTML.
+def get_js_script_content(script_name: str, replacements: Optional[Dict[str, str]] = None) -> str:
+    """Get the content of a JavaScript file with optional replacements.
 
     Args:
-        content: HTML content
-        branch: Branch name
+        script_name: Name of the JavaScript file
+        replacements: Dictionary of replacements to make in the script
 
     Returns:
-        str: Updated HTML content
+        str: Content of the JavaScript file with replacements
     """
-    if '<div class="environment">' in content:
-        return re.sub(
-            r"(<div class=\"environment\">)",
-            "\\1\n<div>Branch: {0}</div>".format(branch),
-            content,
-        )
-    return content
+    script_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "js")
+    script_path = os.path.join(script_dir, script_name)
+
+    if not os.path.exists(script_path):
+        logger.warning(f"JavaScript file not found: {script_path}")
+        return ""
+
+    try:
+        with open(script_path, "r", encoding="utf-8") as f:
+            content = f.read()
+
+        # Apply replacements
+        if replacements:
+            for key, value in replacements.items():
+                content = content.replace(key, value)
+
+        return content
+    except Exception as e:
+        logger.error(f"Error reading JavaScript file {script_path}: {str(e)}")
+        return ""
 
 
-def inject_branch_into_body(content: str, branch: str) -> str:
-    """Inject branch info after the body tag of HTML.
-
-    Args:
-        content: HTML content
-        branch: Branch name
-
-    Returns:
-        str: Updated HTML content
-    """
-    if "<body>" in content:
-        # Break long line into shorter parts
-        div_start = '\\1\n<div style="position:fixed;top:0;right:0;padding:5px;'
-        div_style = 'background:#f8f8f8;z-index:1000;font-size:12px;">'
-        div_content = "Branch: {0}</div>".format(branch)
-
-        return re.sub(r"(<body>)", div_start + div_style + div_content, content)
-    return content
-
-
-def update_environment_html(report_dir: str, branch: str) -> None:
-    """Update HTML files with branch information.
+def inject_branch_js(report_dir: str, branch: str) -> None:
+    """Inject JavaScript to display branch info prominently.
 
     Args:
         report_dir: Path to the Allure report directory
         branch: Branch name to add
     """
     if _dry_run:
-        logger.info("DRY RUN: Would update HTML files with branch {0}".format(branch))
+        logger.info("DRY RUN: Would inject branch JS")
         return
 
-    # Find all HTML files
-    html_files = find_files(report_dir, "*.html")
-    updated_count = 0
+    # Get the content of the JS files
+    replacements = {"{BRANCH_NAME}": branch, "{VERSION}": "1.0.0"}  # Version can be updated as needed
 
-    for html_file in html_files:
+    branch_info_js = get_js_script_content("branch_info.js", replacements)
+    branch_position_js = get_js_script_content("branch_position.js", replacements)
+
+    # Combine the scripts
+    combined_script = f"""
+<script>
+{branch_info_js}
+{branch_position_js}
+</script>
+"""
+
+    # Find index.html files
+    for html_file in find_files(report_dir, "index.html"):
         try:
-            content = read_file(html_file)
+            with open(html_file, "r") as f:
+                content = f.read()
 
-            # Skip if content is None or already has branch info
-            if not should_update_html(content, branch):
-                continue
+            # Add script before closing body tag
+            if "</body>" in content:
+                content = content.replace("</body>", f"{combined_script}\n</body>")
+            else:
+                content += combined_script
 
-            # Content is not None at this point, so we can safely cast it
-            assert content is not None
+            # Write modified content
+            with open(html_file, "w") as f:
+                f.write(content)
 
-            # Try to inject branch info into environment section first
-            new_content = inject_branch_into_environment(content, branch)
-
-            # If no environment section, try body tag
-            if new_content == content:
-                new_content = inject_branch_into_body(content, branch)
-
-            # Skip if no injection point found
-            if new_content == content:
-                continue
-
-            # Write changes if content was modified
-            if write_file(html_file, new_content):
-                updated_count += 1
-
+            logger.info("Injected branch JS in {0}".format(html_file))
         except Exception as e:
-            logger.warning("Error updating HTML file {0}: {1}".format(html_file, str(e)))
-
-    logger.info("Updated {0} HTML files with branch information".format(updated_count))
+            logger.error("Failed to inject branch JS in {0}: {1}".format(html_file, str(e)))
 
 
-def add_branch_info(report_dir: str, branch: Optional[str] = None) -> None:
+def add_branch_info(report_dir: str, branch: str) -> None:
     """Add branch information to Allure report.
 
-    This is the main entry point for adding branch information.
+    This is the main entry point for branch info operations.
 
     Args:
         report_dir: Path to the Allure report directory
-        branch: Branch name to add (auto-detect if None)
+        branch: Branch name to add
     """
-    # Auto-detect branch if not provided
-    if branch is None:
-        branch = get_branch_name()
-
-    logger.info("Adding branch information: {0}".format(branch))
+    if not branch:
+        logger.warning("No branch name provided, skipping branch info")
+        return
 
     # Update environment.properties
     update_environment_properties(report_dir, branch)
 
-    # Update environment.json if it exists
+    # Update environment.json
     update_environment_json(report_dir, branch)
 
-    # Update HTML files
-    update_environment_html(report_dir, branch)
-
-    logger.info("Branch information added successfully")
+    # Inject JavaScript to ensure branch display is correct
+    inject_branch_js(report_dir, branch)
