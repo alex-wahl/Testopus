@@ -291,27 +291,16 @@ jobs:
           check_name: Test Results
 
       # GitHub Pages deployment
-      - name: Setup GitHub Pages
-        if: always()
-        uses: actions/configure-pages@v4
-
-      - name: Upload GitHub Pages artifact
-        if: always()
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: ${{ env.REPORT_DIR }}
-          retention-days: 90
-
-      # Deploy to GitHub Pages via branch
       - name: Deploy to reporting branch
         if: always()
         uses: peaceiris/actions-gh-pages@v3
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./${{ env.REPORT_DIR }}
+          publish_dir: ./reports/allure-report
           publish_branch: reporting
           force_orphan: true
           enable_jekyll: false
+          keep_files: false
           cname: ""
           user_name: "github-actions[bot]"
           user_email: "github-actions[bot]@users.noreply.github.com"
@@ -324,17 +313,16 @@ jobs:
         with:
           script: |
             const artifactUrl = `${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}`;
-            const pagesUrl = `https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}`;
-            const testStatus = `${{ steps.run_tests.outcome }}` === 'success' ? '✅ Tests passed' : '❌ Tests failed';
-
-            const comment = `### ${testStatus}
-
+            let pagesUrl = `https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}`;
+            
+            const comment = `### Test Results
+            
             #### Report Links:
             - [Download Test Reports](${artifactUrl})
             - [View Allure Report](${pagesUrl}) (updated with latest results)
-
+            
             *Tests run by GitHub Actions workflow*`;
-
+            
             github.rest.issues.createComment({
               issue_number: context.issue.number,
               owner: context.repo.owner,
