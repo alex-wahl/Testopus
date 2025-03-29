@@ -51,10 +51,46 @@ def create_cache_busting_script(report_dir: str, timestamp: int) -> None:
     
     script_content = f"""// Cache-busting script generated on {datetime.now().isoformat()}
 document.addEventListener('DOMContentLoaded', function() {{
-  if(!window.location.search.includes('ts=')) {{
+  // Only redirect if no timestamp parameter exists
+  // Check for any timestamp parameter to avoid redirect loops
+  if(!window.location.search.includes('ts=') && 
+     !window.location.search.includes('timestamp=') && 
+     !window.location.search.includes('t=')) {{
+    
+    // Use current time rather than server timestamp to avoid hardcoded values
+    const currentTime = new Date().getTime();
     window.location.href = window.location.href + 
       (window.location.search ? '&' : '?') + 
-      'ts={timestamp}';
+      'ts=' + currentTime;
+    return; // Stop execution to prevent the rest of the script from running during redirect
+  }}
+  
+  // Fix title date format if found - only runs if we're NOT redirecting
+  try {{
+    const titleElements = document.querySelectorAll('.allure-report-title, .title, h1');
+    const dateRegex = /(ALLURE\\s+REPORT\\s+)(\\d{{1,2}})\\/(\\d{{1,2}})\\/(\\d{{4}})/i;
+    
+    titleElements.forEach(function(element) {{
+      if (element && element.textContent) {{
+        const match = element.textContent.match(dateRegex);
+        if (match) {{
+          // Create DD-MM-YYYY format
+          const day = match[3].padStart(2, '0');
+          const month = match[2].padStart(2, '0');
+          const year = match[4];
+          element.textContent = `${{match[1]}}${{day}}-${{month}}-${{year}}`;
+          console.log('Fixed title date format via JS');
+        }}
+      }}
+    }});
+    
+    // Also try to fix document title
+    if (document.title.match(/Allure Report \\d{{1,2}}\\/\\d{{1,2}}\\/\\d{{4}}/i)) {{
+      document.title = "Allure Report {get_current_date_formatted()}";
+      console.log('Fixed document title via JS');
+    }}
+  }} catch (e) {{
+    console.error('Error fixing date format:', e);
   }}
 }});
 """
@@ -81,6 +117,59 @@ def add_cache_headers(report_dir: str) -> None:
         f.write(headers_content)
     
     print("✅ Added cache control headers")
+
+
+def add_branch_info(report_dir: str) -> None:
+    """Add git branch information to environment properties.
+    
+    Reads the branch name from GITHUB_REF or GITHUB_HEAD_REF environment variables
+    and adds it to the Allure environment.properties file.
+    
+    Args:
+        report_dir: Path to the Allure report directory.
+    """
+    env_file = os.path.join(report_dir, "environment.properties")
+    
+    # Try to get branch name from environment variables
+    branch = os.environ.get('GITHUB_HEAD_REF', '')  # For pull requests
+    if not branch:
+        ref = os.environ.get('GITHUB_REF', '')      # For direct pushes
+        if ref.startswith('refs/heads/'):
+            branch = ref.replace('refs/heads/', '')
+    
+    if not branch:
+        try:
+            # Try to get from git command as fallback
+            import subprocess
+            branch = subprocess.check_output(['git', 'rev-parse', '--abbrev-ref', 'HEAD'], 
+                                           stderr=subprocess.DEVNULL).decode('utf-8').strip()
+        except (subprocess.SubprocessError, FileNotFoundError):
+            branch = 'unknown'
+    
+    # Read existing environment properties
+    if os.path.exists(env_file):
+        with open(env_file, 'r', encoding='utf-8') as f:
+            lines = f.readlines()
+    else:
+        lines = []
+    
+    # Check if Branch property already exists
+    branch_exists = False
+    for i, line in enumerate(lines):
+        if line.startswith('Branch='):
+            lines[i] = f'Branch={branch}\n'
+            branch_exists = True
+            break
+    
+    # Add branch if it doesn't exist
+    if not branch_exists:
+        lines.append(f'Branch={branch}\n')
+    
+    # Write updated environment properties
+    with open(env_file, 'w', encoding='utf-8') as f:
+        f.writelines(lines)
+    
+    print(f"✅ Added branch information: {branch}")
 
 
 def fix_date_formats_in_json(report_dir: str) -> None:
@@ -116,6 +205,36 @@ def fix_title_date_format(report_dir: str) -> None:
     """
     today = get_current_date_formatted()
     
+    # Find index.html - special direct replacement for the main page
+    index_file = os.path.join(report_dir, "index.html")
+    if os.path.exists(index_file):
+        print(f"✅ Processing index.html directly...")
+        try:
+            with open(index_file, 'r', encoding='utf-8') as f:
+                content = f.read()
+            
+            # Direct substitute any pattern like "ALLURE REPORT MM/DD/YYYY" to our desired format
+            # First find the pattern with regex
+            title_matches = re.findall(r'ALLURE REPORT \d{1,2}/\d{1,2}/\d{4}', content, re.IGNORECASE)
+            if title_matches:
+                for match in title_matches:
+                    content = content.replace(match, f"ALLURE REPORT {today}")
+                    print(f"  - Replaced '{match}' with 'ALLURE REPORT {today}'")
+            
+            # Also try with regex capturing the date parts
+            content = re.sub(
+                r'(ALLURE\s+REPORT\s+)\d{1,2}/\d{1,2}/\d{4}', 
+                f'\\1{today}', 
+                content,
+                flags=re.IGNORECASE
+            )
+            
+            # Write the updated content
+            with open(index_file, 'w', encoding='utf-8') as f:
+                f.write(content)
+        except Exception as e:
+            print(f"⚠️ Warning: Error updating index.html: {e}")
+    
     # Process HTML files
     html_files = glob.glob(os.path.join(report_dir, "**", "*.html"), recursive=True)
     for html_file in html_files:
@@ -129,12 +248,21 @@ def fix_title_date_format(report_dir: str) -> None:
             content
         )
         
-        # Fix header titles with date
-        new_content = re.sub(
-            r'ALLURE REPORT \d{1,2}/\d{1,2}/\d{4}', 
-            f'ALLURE REPORT {today}', 
-            new_content
-        )
+        # Fix header titles with date - case insensitive matching
+        patterns = [
+            r'ALLURE REPORT \d{1,2}/\d{1,2}/\d{4}',  # ALLURE REPORT 3/29/2025
+            r'Allure Report \d{1,2}/\d{1,2}/\d{4}',  # Allure Report 3/29/2025
+            r'ALLURE REPORT \d{1,2}-\d{1,2}-\d{4}',  # ALLURE REPORT 3-29-2025
+            r'Allure Report \d{1,2}-\d{1,2}-\d{4}'   # Allure Report 3-29-2025
+        ]
+        
+        for pattern in patterns:
+            new_content = re.sub(
+                pattern, 
+                f'ALLURE REPORT {today}', 
+                new_content,
+                flags=re.IGNORECASE
+            )
         
         if new_content != content:
             with open(html_file, 'w', encoding='utf-8') as f:
@@ -146,19 +274,34 @@ def fix_title_date_format(report_dir: str) -> None:
         with open(js_file, 'r', encoding='utf-8') as f:
             content = f.read()
         
-        # Replace dates in various formats
-        new_content = re.sub(
-            r'\b(\d{1,2})/(\d{1,2})/(\d{4})\b', 
-            lambda m: f"{m.group(2)}-{m.group(1)}-{m.group(3)}", 
-            content
-        )
+        # Replace dates in various formats - all possible formats
+        for pattern in [
+            r'\b(\d{1,2})/(\d{1,2})/(\d{4})\b',  # MM/DD/YYYY
+            r'\b(\d{4})/(\d{1,2})/(\d{1,2})\b',  # YYYY/MM/DD
+            r'\b(\d{1,2})-(\d{1,2})-(\d{4})\b',  # MM-DD-YYYY
+            r'\b(\d{4})-(\d{1,2})-(\d{1,2})\b'   # YYYY-MM-DD
+        ]:
+            new_content = re.sub(
+                pattern, 
+                f"{today}", 
+                new_content
+            )
         
-        # Replace title strings
-        new_content = re.sub(
-            r'ALLURE REPORT \d{1,2}/\d{1,2}/\d{4}', 
-            f'ALLURE REPORT {today}', 
-            new_content
-        )
+        # Direct text replacement for title strings
+        for title_pattern in [
+            r'ALLURE REPORT \d{1,2}/\d{1,2}/\d{4}',
+            r'Allure Report \d{1,2}/\d{1,2}/\d{4}',
+            r'"title":"ALLURE REPORT \d{1,2}/\d{1,2}/\d{4}"',
+            r'"title":"Allure Report \d{1,2}/\d{1,2}/\d{4}"',
+            r'"title": "ALLURE REPORT \d{1,2}/\d{1,2}/\d{4}"',
+            r'"title": "Allure Report \d{1,2}/\d{1,2}/\d{4}"'
+        ]:
+            new_content = re.sub(
+                title_pattern, 
+                f'ALLURE REPORT {today}', 
+                new_content,
+                flags=re.IGNORECASE
+            )
         
         # Replace date format patterns
         new_content = re.sub(
@@ -171,6 +314,32 @@ def fix_title_date_format(report_dir: str) -> None:
             with open(js_file, 'w', encoding='utf-8') as f:
                 f.write(new_content)
     
+    # Look for the Widgets JS file specifically (often controls title)
+    widgets_files = glob.glob(os.path.join(report_dir, "**", "widgets.js"), recursive=True)
+    for widget_file in widgets_files:
+        try:
+            with open(widget_file, 'r', encoding='utf-8') as f:
+                content = f.read()
+            
+            # Brute force replacement of any MM/DD/YYYY pattern with our desired format
+            # This is a more aggressive approach for the widgets.js file
+            for month in range(1, 13):
+                for day in range(1, 32):
+                    for year in [2023, 2024, 2025, 2026]:
+                        old_date = f"{month}/{day}/{year}"
+                        
+                        # Replace in the content
+                        content = content.replace(old_date, today)
+                        content = content.replace(f'"{old_date}"', f'"{today}"')
+                        content = content.replace(f"'{old_date}'", f"'{today}'")
+            
+            with open(widget_file, 'w', encoding='utf-8') as f:
+                f.write(content)
+                
+            print(f"✅ Fixed dates in widgets.js")
+        except Exception as e:
+            print(f"⚠️ Warning: Failed to process widgets.js: {e}")
+    
     print("✅ Fixed date format in report titles")
 
 
@@ -182,6 +351,9 @@ def add_cache_busting_to_html(report_dir: str, timestamp: int) -> None:
         timestamp: Timestamp to use for cache busting.
     """
     html_files = glob.glob(os.path.join(report_dir, "**", "*.html"), recursive=True)
+    
+    # Add version parameter to the script URL to prevent caching of the JS file itself,
+    # but don't add timestamp to the meta tags to prevent page redirect issues
     head_tag_with_meta = f'<head><meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate"><script src="assets/force-refresh.js?v={timestamp}"></script>'
     
     for html_file in html_files:
@@ -208,6 +380,54 @@ def create_nojekyll_file(report_dir: str) -> None:
         pass
     
     print("✅ Created .nojekyll file")
+
+
+def cleanup_previous_customizations(report_dir: str) -> None:
+    """Remove artifacts from previous customization attempts.
+    
+    This helps prevent conflicts between different customization approaches
+    that might interfere with each other.
+    
+    Args:
+        report_dir: Path to the Allure report directory.
+    """
+    # Files to check and delete if they exist
+    files_to_clean = [
+        os.path.join(report_dir, "js", "cache-buster.js"),
+        os.path.join(report_dir, "cache-buster.js")
+    ]
+    
+    for file_path in files_to_clean:
+        if os.path.exists(file_path):
+            try:
+                os.remove(file_path)
+                print(f"✅ Removed old customization file: {file_path}")
+            except Exception as e:
+                print(f"⚠️ Warning: Failed to remove file {file_path}: {e}")
+                
+    # Check all HTML files for problematic meta refresh tags that might cause redirects
+    html_files = glob.glob(os.path.join(report_dir, "**", "*.html"), recursive=True)
+    for html_file in html_files:
+        try:
+            with open(html_file, 'r', encoding='utf-8') as f:
+                content = f.read()
+            
+            # Remove any <meta http-equiv="refresh" ...> tags
+            if '<meta http-equiv="refresh"' in content:
+                new_content = re.sub(
+                    r'<meta\s+http-equiv=["\']refresh["\'][^>]*>', 
+                    '', 
+                    content
+                )
+                
+                if new_content != content:
+                    with open(html_file, 'w', encoding='utf-8') as f:
+                        f.write(new_content)
+                    print(f"✅ Removed problematic refresh meta tag from {os.path.basename(html_file)}")
+        except Exception as e:
+            print(f"⚠️ Warning: Failed to check/clean HTML file {html_file}: {e}")
+    
+    print("✅ Cleanup of previous customizations completed")
 
 
 def create_dummy_report(report_dir: str) -> None:
@@ -291,13 +511,18 @@ def main() -> int:
         create_dummy_report(report_dir)
         return 0
     
+    # Generate timestamp for this run
     timestamp = get_current_timestamp()
+    
+    # Clean up any previous customizations that might interfere
+    cleanup_previous_customizations(report_dir)
     
     # Apply customizations
     fix_date_formats_in_json(report_dir)
     fix_title_date_format(report_dir)
     create_cache_busting_script(report_dir, timestamp)
     add_cache_headers(report_dir)
+    add_branch_info(report_dir)
     add_cache_busting_to_html(report_dir, timestamp)
     create_nojekyll_file(report_dir)
     
