@@ -197,7 +197,7 @@ jobs:
       
       # For direct branch upload - GitHub Pages is configured to use the 'reporting' branch
       - name: Deploy to reporting branch
-        if: always() && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+        if: always()
         uses: peaceiris/actions-gh-pages@v3
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
