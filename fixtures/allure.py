@@ -152,7 +152,6 @@ def pytest_sessionfinish(session):
         f.write(f"Python.Version={sys.version.split(' ')[0]}\n")
         f.write(f"Timestamp={datetime.datetime.now().isoformat()}\n")
         f.write(f"Timezone=Europe/Berlin\n")
-        f.write(f"Timestamp={datetime.datetime.now().isoformat()}\n")
 
 # Add additional metadata using Allure's API
 @pytest.hookimpl(hookwrapper=True)
