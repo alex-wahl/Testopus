@@ -249,13 +249,21 @@ Testopus includes a full CI/CD pipeline using GitHub Actions that automatically:
 1. Builds the Docker image for testing
 2. Runs the test suite on each push and pull request
 3. Generates comprehensive test reports
-4. Deploys reports to GitHub Pages for easy viewing
-5. Comments on PRs with links to reports
+4. Preserves test history to build trends (up to 90 days)
+5. Deploys reports to GitHub Pages for easy viewing
+6. Comments on PRs with links to reports
 
 For detailed information, see:
 - [CI/CD Documentation](ci/README.md) - Overview of the CI/CD setup
 - [GitHub Actions Workflow](ci/docs/github-actions.md) - Detailed workflow documentation
 - [Allure Customization Flow](ci/docs/allure_customization_flow.md) - How reports are customized
+
+**Recently Added Files:**
+- `ci/scripts/customize_allure_report.py` - Updated with test history preservation
+- `ci/templates/inline_date_formatter.js.template` - Template for date formatting in dynamic content
+- `ci/templates/cache_headers.html` - Template for cache control headers
+- `ci/templates/spinner_fix.css` - CSS template to fix spinner animations
+- `ci/js/inline_date_formatter.js` - JavaScript for injecting into app.js to fix date formats
 
 ### Allure Reporting Fixtures
 
