@@ -5,7 +5,6 @@ This module provides functionality to preserve history data between Allure repor
 ensuring test statistics and trends are maintained across multiple runs.
 """
 
-import glob
 import logging
 import os
 import shutil

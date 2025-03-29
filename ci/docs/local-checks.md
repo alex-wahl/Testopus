@@ -210,4 +210,4 @@ To add new checks to the pre-commit configuration:
 
 ## Conclusion
 
-Local code quality checks are a critical part of the development workflow in Testopus. By catching issues early in the development process, these tools help maintain high code quality standards and reduce the likelihood of bugs in production. 
+Local code quality checks are a critical part of the development workflow in Testopus. By catching issues early in the development process, these tools help maintain high code quality standards and reduce the likelihood of bugs in production.
