@@ -157,8 +157,16 @@ jobs:
         if: always()
         run: |
           if [ -d "reports/allure-results" ] && [ "$(ls -A reports/allure-results)" ]; then
+            # Set timezone to Berlin
+            export TZ=Europe/Berlin
+            
+            # Generate the report
             ./allure-2.24.0/bin/allure generate reports/allure-results -o reports/allure-report --clean
-            echo "Allure report generated successfully"
+            
+            # Fix timestamp format in the generated report
+            find reports/allure-report -type f -name "*.json" -exec sed -i 's/\([0-9]\{4\}\).\([0-9]\{2\}\).\([0-9]\{2\}\)T\([0-9]\{2\}\):\([0-9]\{2\}\):\([0-9]\{2\}\)/\3-\2-\1 \4:\5:\6/g' {} \;
+            
+            echo "Allure report generated successfully with custom date format"
             echo "Checking Allure report content:"
             ls -la reports/allure-report/
             find reports/allure-report -type f | head -n 10
