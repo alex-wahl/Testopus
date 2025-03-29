@@ -1,7 +1,7 @@
 // Fix for branch tab and 404 errors
 document.addEventListener('DOMContentLoaded', function() {
     // Add branch data attribute to body
-    document.body.setAttribute('data-branch', '{{BRANCH_NAME}}');
+    document.body.setAttribute('data-branch', '{BRANCH_NAME}');
 
     // Fix 404 errors on tab navigation
     var handleAnchorClick = function(e) {

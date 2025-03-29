@@ -254,14 +254,13 @@ def update_branch_in_json_data(data: list, branch: str) -> Tuple[list, bool]:
     Returns:
         tuple: Updated data and whether branch existed previously
     """
-    # Remove any existing branch entry
+    # Remove any existing branch entry and check if any were found
+    initial_count = len(data)
     new_data = [item for item in data if item.get("name") != "Branch"]
+    branch_existed = initial_count > len(new_data)
 
     # Add branch as the first item
-    new_data.insert(0, {"name": "Branch", "value": branch})
-
-    # Check if we actually made changes
-    branch_existed = len(data) != len(new_data)
+    new_data.insert(0, {"name": "Branch", "values": [branch]})
 
     return new_data, branch_existed
 

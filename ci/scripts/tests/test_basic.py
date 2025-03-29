@@ -11,13 +11,14 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from typing import Dict, List
 
 # Add project root to Python path for imports
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent.parent))
 
 # Import modules for testing
 from ci.scripts import customize_allure_report  # noqa: E402
-from ci.scripts.modules.branch_info import get_branch_name  # noqa: E402
+from ci.scripts.modules.branch_info import get_branch_name, update_branch_in_json_data  # noqa: E402
 from ci.scripts.modules.date_formatter import get_current_date_formatted  # noqa: E402
 from ci.scripts.modules.dummy_report import create_dummy_report  # noqa: E402
 from ci.scripts.utils.constants import VERSION  # noqa: E402
@@ -87,6 +88,37 @@ class TestBasicFunctionality(unittest.TestCase):
         # Check that the report was created
         self.assertTrue(os.path.exists(self.report_dir))
         self.assertTrue(os.path.exists(os.path.join(self.report_dir, "index.html")))
+
+    def test_update_branch_in_json_data(self):
+        """Test branch information is correctly formatted in JSON data.
+
+        Verifies that the branch info is added with 'values' array instead of 'value'.
+        """
+        # Test with empty data
+        empty_data: List[Dict[str, object]] = []
+        branch = "test-branch"
+        updated_data, existed = update_branch_in_json_data(empty_data, branch)
+
+        # Verify structure
+        self.assertEqual(len(updated_data), 1)
+        self.assertEqual(updated_data[0]["name"], "Branch")
+        self.assertIn("values", updated_data[0])
+        self.assertEqual(updated_data[0]["values"], [branch])
+        self.assertFalse(existed)
+
+        # Test with existing data
+        existing_data: List[Dict[str, object]] = [
+            {"name": "OS", "values": ["Linux"]},
+            {"name": "Branch", "values": ["old-branch"]},
+        ]
+        updated_data, existed = update_branch_in_json_data(existing_data, branch)
+
+        # Verify structure
+        self.assertEqual(len(updated_data), 2)
+        self.assertEqual(updated_data[0]["name"], "Branch")
+        self.assertEqual(updated_data[0]["values"], [branch])
+        self.assertEqual(updated_data[1]["name"], "OS")
+        self.assertTrue(existed)
 
 
 if __name__ == "__main__":
