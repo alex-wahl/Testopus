@@ -9,16 +9,9 @@ import logging
 import os
 import re
 import subprocess
-from pathlib import Path
-from typing import Dict, List, Union
 
-from utils.constants import (
-    ENV_GITHUB_HEAD_REF,
-    ENV_GITHUB_REF,
-    ENV_PROPERTIES_FILE,
-    JS_BRANCH_INFO,
-)
-from utils.file_utils import find_files, modify_file, read_file, write_file
+from utils.constants import ENV_GITHUB_HEAD_REF, ENV_GITHUB_REF, ENV_PROPERTIES_FILE
+from utils.file_utils import find_files, read_file, write_file
 
 # Set up logging
 logger = logging.getLogger("allure-customizer.branch-info")
@@ -122,7 +115,9 @@ def update_environment_properties(report_dir: str, branch: str) -> None:
     """
     if _dry_run:
         logger.info(
-            f"DRY RUN: Would update environment properties with branch {branch}"
+            "DRY RUN: Would update environment properties with branch {0}".format(
+                branch
+            )
         )
         return
 
@@ -130,7 +125,7 @@ def update_environment_properties(report_dir: str, branch: str) -> None:
 
     # Create file if it doesn't exist
     if not os.path.exists(env_file):
-        logger.info(f"Creating environment.properties file")
+        logger.info("Creating environment.properties file")
         with open(env_file, "w") as f:
             f.write(f"Branch={branch}\n")
         return
@@ -244,7 +239,7 @@ def update_environment_html(report_dir: str, branch: str) -> None:
                     # Inject after body tag
                     new_content = re.sub(
                         r"(<body>)",
-                        f'\\1\n<div style="position:fixed;top:0;right:0;padding:5px;background:#f8f8f8;z-index:1000;font-size:12px;">'
+                        '\\1\n<div style="position:fixed;top:0;right:0;padding:5px;background:#f8f8f8;z-index:1000;font-size:12px;">'
                         f"Branch: {branch}</div>",
                         content,
                     )

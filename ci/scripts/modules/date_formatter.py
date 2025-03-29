@@ -8,20 +8,9 @@ making them more readable and consistent.
 import logging
 import os
 import re
-import time
 from datetime import datetime
-from typing import Dict, Optional
 
-from utils.constants import (
-    DATE_PATTERN_DD_MM_YYYY,
-    DATE_PATTERN_MM_DD_YYYY,
-    HTML_FILES,
-    ISO_TIMESTAMP_PATTERN,
-    JS_DATE_FORMATTER,
-    JS_FILES,
-    JS_INLINE_DATE_FORMATTER,
-    JSON_FILES,
-)
+from utils.constants import DATE_PATTERN_MM_DD_YYYY, ISO_TIMESTAMP_PATTERN
 from utils.file_utils import modify_file
 
 # Set up logging

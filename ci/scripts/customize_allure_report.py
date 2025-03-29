@@ -27,7 +27,6 @@ import argparse
 import logging
 import os
 import sys
-from pathlib import Path
 
 # Importing our modules
 from modules.branch_info import add_branch_info
@@ -66,7 +65,9 @@ def parse_args():
     )
     parser.add_argument(
         "--report-dir",
-        help=f"Path to the Allure report directory. Defaults to {DEFAULT_REPORT_DIR}",
+        help="Path to the Allure report directory. Defaults to {0}".format(
+            DEFAULT_REPORT_DIR
+        ),
     )
     parser.add_argument(
         "--dummy",
@@ -84,7 +85,7 @@ def parse_args():
     )
     parser.add_argument("--verbose", action="store_true", help="Enable verbose output")
     parser.add_argument(
-        "--version", action="version", version=f"%(prog)s {__version__}"
+        "--version", action="version", version="%(prog)s {0}".format(__version__)
     )
 
     return parser.parse_args()
@@ -102,7 +103,7 @@ def setup_logging(verbose=False):
 
 
 def main():
-    """Main entry point for the script."""
+    """Entry point for the script."""
     args = parse_args()
 
     # Set up logging
@@ -117,7 +118,7 @@ def main():
     # Create dummy report if needed
     create_dummy = args.dummy or os.environ.get(ENV_CREATE_DUMMY) == "true"
     if create_dummy:
-        logger.info(f"Creating dummy report in {report_dir}")
+        logger.info("Creating dummy report in {0}".format(report_dir))
         if args.dry_run:
             logger.info("DRY RUN: Would create dummy report")
         else:
@@ -126,17 +127,18 @@ def main():
 
     # Check if report directory exists
     if not os.path.exists(report_dir):
-        logger.error(f"Report directory does not exist: {report_dir}")
+        logger.error("Report directory does not exist: {0}".format(report_dir))
         return 1
 
     # Create .nojekyll file for GitHub Pages
     nojekyll_path = os.path.join(report_dir, NOJEKYLL_FILE)
     if not os.path.exists(nojekyll_path):
-        logger.info(f"Creating {NOJEKYLL_FILE} file at {nojekyll_path}")
+        logger.info("Creating {0} file at {1}".format(NOJEKYLL_FILE, nojekyll_path))
         if not args.dry_run:
             with open(nojekyll_path, "w") as f:
+                # Empty file is sufficient
                 pass
-            logger.info(f"Created {NOJEKYLL_FILE} file at {nojekyll_path}")
+            logger.info("Created {0} file at {1}".format(NOJEKYLL_FILE, nojekyll_path))
 
     # Get branch name from arguments or environment variables
     branch = (
@@ -149,12 +151,12 @@ def main():
 
     # Add branch info to the report
     if branch:
-        logger.info(f"Adding branch info: {branch}")
+        logger.info("Adding branch info: {0}".format(branch))
         if args.dry_run:
             logger.info("DRY RUN: Would add branch info")
         else:
             add_branch_info(report_dir, branch)
-            logger.info(f"Added branch info: {branch}")
+            logger.info("Added branch info: {0}".format(branch))
 
     # Add cache control headers
     logger.info("Adding cache control headers")
