@@ -54,7 +54,7 @@ jobs:
         run: |
           mkdir -p reports/allure-results
           mkdir -p reports/html
-          mkdir -p reports/json
+          mkdir -p reports/junit
           mkdir -p reports/screenshots
           mkdir -p reports/allure-report
           chmod -R 777 reports
@@ -102,13 +102,13 @@ jobs:
       - name: Run tests
         run: |
           if [ "${{ github.event.inputs.test_suite }}" = "ui" ]; then
-            docker compose -f docker/docker-compose.yml run --rm testopus --verbose -vv --alluredir=/app/reports/allure-results --html=/app/reports/html/report.html --json-report --json-report-file=/app/reports/json/report_ui.json /app/tests/ui_tests/web ${{ github.event.inputs.custom_flags }}
+            docker compose -f docker/docker-compose.yml run --rm testopus --verbose -vv --alluredir=/app/reports/allure-results --html=/app/reports/html/report.html --junitxml=/app/reports/junit/report_ui.xml /app/tests/ui_tests/web ${{ github.event.inputs.custom_flags }}
           elif [ "${{ github.event.inputs.test_suite }}" = "api" ]; then
-            docker compose -f docker/docker-compose.yml run --rm testopus --verbose -vv --alluredir=/app/reports/allure-results --html=/app/reports/html/report.html --json-report --json-report-file=/app/reports/json/report_api.json /app/tests/api_tests ${{ github.event.inputs.custom_flags }}
+            docker compose -f docker/docker-compose.yml run --rm testopus --verbose -vv --alluredir=/app/reports/allure-results --html=/app/reports/html/report.html --junitxml=/app/reports/junit/report_api.xml /app/tests/api_tests ${{ github.event.inputs.custom_flags }}
           elif [ "${{ github.event.inputs.test_suite }}" = "internal" ]; then
-            docker compose -f docker/docker-compose.yml run --rm testopus --verbose -vv --alluredir=/app/reports/allure-results --html=/app/reports/html/report.html --json-report --json-report-file=/app/reports/json/report_internal.json /app/tests/internal_tests ${{ github.event.inputs.custom_flags }}
+            docker compose -f docker/docker-compose.yml run --rm testopus --verbose -vv --alluredir=/app/reports/allure-results --html=/app/reports/html/report.html --junitxml=/app/reports/junit/report_internal.xml /app/tests/internal_tests ${{ github.event.inputs.custom_flags }}
           else
-            docker compose -f docker/docker-compose.yml run --rm testopus --verbose -vv --alluredir=/app/reports/allure-results --html=/app/reports/html/report.html --json-report --json-report-file=/app/reports/json/report_all.json /app/tests ${{ github.event.inputs.custom_flags }}
+            docker compose -f docker/docker-compose.yml run --rm testopus --verbose -vv --alluredir=/app/reports/allure-results --html=/app/reports/html/report.html --junitxml=/app/reports/junit/report_all.xml /app/tests ${{ github.event.inputs.custom_flags }}
           fi
         env:
           DEBUG_MODE: ${{ github.event.inputs.debug_mode == 'true' }}
@@ -129,6 +129,8 @@ jobs:
           ls -la reports/allure-results/ || echo "No allure-results directory"
           echo "=== HTML report ==="
           ls -la reports/html/ || echo "No html directory"
+          echo "=== JUnit reports ==="
+          ls -la reports/junit/ || echo "No junit directory"
           echo "=== Screenshots ==="
           ls -la reports/screenshots/ || echo "No screenshots directory"
       
@@ -160,7 +162,7 @@ jobs:
           name: test-reports
           path: |
             reports/html/
-            reports/json/
+            reports/junit/
             reports/screenshots/
             reports/allure-results/
             reports/allure-report/
@@ -170,7 +172,7 @@ jobs:
         if: always()
         uses: EnricoMi/publish-unit-test-result-action@v2
         with:
-          files: reports/json/report*.json
+          files: reports/junit/report*.xml
           check_name: Test Results
       
       # Configure GitHub Pages

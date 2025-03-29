@@ -36,7 +36,6 @@ RUN pip install --no-cache-dir \
     pytest-mock>=3.14.0 \
     pytest-xdist==3.6.1 \
     pytest-check==2.3.1 \
-    pytest-json-report>=1.5.0 \
     selenium==4.29.0 \
     Appium-Python-Client==4.5.1 \
     playwright==1.50.0 \

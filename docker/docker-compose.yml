@@ -9,6 +9,6 @@ services:
       - PYTHONPATH=/app
       - DOCKER_ENV=true
       - PYTEST_ADDOPTS=--verbose
-    # Run with appropriate flags for Allure reporting and JSON output
-    command: --verbose -vv --alluredir=/app/reports/allure-results --html=/app/reports/html/report.html --self-contained-html --json-report --json-report-file=/app/reports/json/report_$(date +%Y%m%d%H%M%S).json /app/tests
+    # Run with appropriate flags for Allure reporting and JUnit XML output
+    command: --verbose -vv --alluredir=/app/reports/allure-results --html=/app/reports/html/report.html --self-contained-html --junitxml=/app/reports/junit/report.xml /app/tests
     shm_size: 2gb  
