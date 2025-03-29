@@ -1,6 +1,6 @@
 ---
-description: 
-globs: 
+description:
+globs:
 alwaysApply: true
 ---
 ---
@@ -12,6 +12,7 @@ globs: **/*.py
 - Use clear, descriptive names for variables and functions, following the convention of lowercase with underscores
 - Maintain consistent indentation (4 spaces) and spacing throughout your code
 - Break down complex functions into smaller, focused units to adhere to the Single Responsibility Principle (SRP)
+- Follow the principle of separation of concerns
 - Keep functions concise, ideally under 20 lines, to enhance readability
 - Utilize list comprehensions and generator expressions for concise and efficient data processing
 - Implement proper error handling with try/except blocks, and use specific exception types when possible
