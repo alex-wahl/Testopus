@@ -56,15 +56,12 @@ def create_nojekyll_file(report_dir: str) -> None:
     logger.info("Created .nojekyll file")
 
 
-def add_branch_info(report_dir: str) -> None:
-    """Add git branch information to environment properties.
+def get_branch_name() -> str:
+    """Get the current branch name from environment or git command.
     
-    Args:
-        report_dir: Path to the Allure report directory.
+    Returns:
+        str: Current branch name or 'unknown' if not available.
     """
-    env_file = os.path.join(report_dir, "environment.properties")
-    
-    # Try to get branch name from environment variables
     branch = os.environ.get('GITHUB_HEAD_REF', '')  # For pull requests
     if not branch:
         ref = os.environ.get('GITHUB_REF', '')      # For direct pushes
@@ -78,6 +75,20 @@ def add_branch_info(report_dir: str) -> None:
                                           stderr=subprocess.DEVNULL).decode('utf-8').strip()
         except (subprocess.SubprocessError, FileNotFoundError):
             branch = 'unknown'
+    
+    return branch
+
+
+def add_branch_info(report_dir: str) -> None:
+    """Add git branch information to environment properties and make it visible in the UI.
+    
+    Args:
+        report_dir: Path to the Allure report directory.
+    """
+    env_file = os.path.join(report_dir, "environment.properties")
+    
+    # Get branch name
+    branch = get_branch_name()
     
     # Read existing environment properties
     if os.path.exists(env_file):
@@ -102,6 +113,39 @@ def add_branch_info(report_dir: str) -> None:
     with open(env_file, 'w', encoding='utf-8') as f:
         f.writelines(lines)
     
+    # Also inject branch info directly into HTML for better visibility
+    html_files = glob.glob(os.path.join(report_dir, "**", "*.html"), recursive=True)
+    for html_file in html_files:
+        try:
+            with open(html_file, 'r', encoding='utf-8') as f:
+                content = f.read()
+            
+            # Add branch name to the ENVIRONMENT section if not already there
+            if 'Branch' not in content and 'ENVIRONMENT' in content:
+                # Try different approaches to inject the branch information
+                
+                # 1. Try finding the ENVIRONMENT section with a table
+                env_pattern = r'(<div[^>]*>\s*<div[^>]*>\s*ENVIRONMENT\s*</div>.*?<table[^>]*>)(.*?)(</table>)'
+                match = re.search(env_pattern, content, re.DOTALL)
+                if match:
+                    # Insert branch row into the environment table
+                    branch_row = f'<tr><td>Branch</td><td>{branch}</td></tr>'
+                    new_table_content = match.group(1) + match.group(2) + branch_row + match.group(3)
+                    content = content.replace(match.group(0), new_table_content)
+                    
+                # 2. Alternative: Look for OS row and add branch after it
+                os_pattern = r'(<tr>\s*<td>\s*OS\s*</td>\s*<td>[^<]*</td>\s*</tr>)'
+                if re.search(os_pattern, content):
+                    os_match = re.search(os_pattern, content)
+                    if os_match:
+                        branch_row = f'<tr><td>Branch</td><td>{branch}</td></tr>'
+                        content = content.replace(os_match.group(0), os_match.group(0) + branch_row)
+                
+                with open(html_file, 'w', encoding='utf-8') as f:
+                    f.write(content)
+        except Exception as e:
+            logger.warning(f"Error adding branch info to HTML: {e}")
+    
     logger.info(f"Added branch information: {branch}")
 
 
@@ -112,6 +156,9 @@ def fix_html_title_tags(report_dir: str) -> None:
         report_dir: Path to the Allure report directory.
     """
     today = get_current_date_formatted()
+    
+    # Get branch name for the script
+    branch = get_branch_name()
     
     html_files = glob.glob(os.path.join(report_dir, "**", "*.html"), recursive=True)
     for html_file in html_files:
@@ -126,14 +173,136 @@ def fix_html_title_tags(report_dir: str) -> None:
                 content
             )
             
-            # Fix visible title in the HTML content - using simple string replacement
-            pattern = 'ALLURE REPORT'
-            report_with_date_pattern = re.compile(r'ALLURE\s+REPORT\s+\d{1,2}[-/]\d{1,2}[-/]\d{4}', re.IGNORECASE)
+            # Fix visible title in the HTML content - more specific pattern matching
+            # Match both MM/DD/YYYY and DD-MM-YYYY formats
+            date_patterns = [
+                # Match "ALLURE REPORT MM/DD/YYYY" format seen in screenshot
+                r'(ALLURE\s+REPORT\s+)(\d{1,2})/(\d{1,2})/(\d{4})',
+                # Also match other possible formats
+                r'(ALLURE\s+REPORT\s+)(\d{1,2})-(\d{1,2})-(\d{4})',
+                r'(Allure\s+Report\s+)(\d{1,2})/(\d{1,2})/(\d{4})',
+                r'(Allure\s+Report\s+)(\d{1,2})-(\d{1,2})-(\d{4})'
+            ]
             
-            # First try finding pattern with date
-            date_matches = report_with_date_pattern.findall(new_content)
-            for match in date_matches:
-                new_content = new_content.replace(match, f'ALLURE REPORT {today}')
+            for pattern in date_patterns:
+                # Replace with the correct DD-MM-YYYY format
+                # Group 2 is the month, 3 is the day, 4 is the year in the regex
+                new_content = re.sub(
+                    pattern,
+                    lambda m: f"{m.group(1)}{m.group(3)}-{m.group(2)}-{m.group(4)}" if len(m.groups()) >= 4 else f"{m.group(1)}{today}",
+                    new_content,
+                    flags=re.IGNORECASE
+                )
+            
+            # Find and fix the main header date format from the screenshot
+            # Direct replacement for the exact format from the screenshot
+            main_pattern = r'(ALLURE REPORT )(\d)/(\d{2})/(\d{4})'
+            new_content = re.sub(
+                main_pattern,
+                lambda m: f'{m.group(1)}{m.group(3)}-0{m.group(2)}-{m.group(4)}',
+                new_content
+            )
+            
+            # Try with full month number
+            main_pattern2 = r'(ALLURE REPORT )(\d{2})/(\d{2})/(\d{4})'
+            new_content = re.sub(
+                main_pattern2,
+                lambda m: f'{m.group(1)}{m.group(3)}-{m.group(2)}-{m.group(4)}',
+                new_content
+            )
+            
+            # Also try directly matching the example in the screenshot (3/29/2025)
+            exact_pattern = r'(ALLURE REPORT )3/29/2025'
+            if 'ALLURE REPORT 3/29/2025' in new_content:
+                new_content = new_content.replace('ALLURE REPORT 3/29/2025', f'ALLURE REPORT 29-03-2025')
+            
+            # Inject a direct DOM manipulation script for SPA interfaces like the one in the screenshot
+            # This will run on page load and fix dynamic content
+            if html_file.endswith('index.html'):
+                logger.info(f"Processing index.html, injecting dynamic content fix script")
+                
+                # Create a script to fix dates in the dynamic content - use raw string to avoid escape issues
+                date_fix_script = fr"""
+<script>
+// Script to fix date formats in the Allure Report UI
+document.addEventListener('DOMContentLoaded', function() {{
+  // Run immediately and after content might have loaded
+  fixAllureDates();
+  setTimeout(fixAllureDates, 500);
+  setTimeout(fixAllureDates, 1500);
+  setTimeout(fixAllureDates, 3000);
+  
+  // Also set up a mutation observer to catch dynamic content
+  const observer = new MutationObserver(function(mutations) {{
+    fixAllureDates();
+  }});
+  
+  // Start observing the document body for DOM changes
+  observer.observe(document.body, {{
+    childList: true,
+    subtree: true
+  }});
+  
+  function fixAllureDates() {{
+    // Convert any MM/DD/YYYY to DD-MM-YYYY in the document
+    const datePattern = /(ALLURE REPORT |Allure Report )(\d{{1,2}})\/(\d{{1,2}})\/(\d{{4}})/gi;
+    
+    // Process all text nodes in the document
+    const textNodes = [];
+    const walker = document.createTreeWalker(
+      document.body,
+      NodeFilter.SHOW_TEXT,
+      null,
+      false
+    );
+    
+    let node;
+    while (node = walker.nextNode()) {{
+      if (node.nodeValue.match(datePattern)) {{
+        node.nodeValue = node.nodeValue.replace(datePattern, function(match, prefix, month, day, year) {{
+          return prefix + day + '-' + month + '-' + year;
+        }});
+      }}
+    }}
+    
+    // Also check specific DOM elements that may contain the date
+    const headerElement = document.querySelector('.header, [class*="header"], [class*="title"]');
+    if (headerElement && headerElement.innerText) {{
+      if (headerElement.innerText.match(datePattern)) {{
+        headerElement.innerText = headerElement.innerText.replace(datePattern, function(match, prefix, month, day, year) {{
+          return prefix + day + '-' + month + '-' + year;
+        }});
+      }}
+    }}
+    
+    // Look for specific elements in the Allure UI that might contain the date
+    document.querySelectorAll('.app__header, .header').forEach(function(el) {{
+      if (el.innerText && el.innerText.match(datePattern)) {{
+        el.innerText = el.innerText.replace(datePattern, function(match, prefix, month, day, year) {{
+          return prefix + day + '-' + month + '-' + year;
+        }});
+      }}
+    }});
+    
+    // Also add branch name to environment if not present
+    const envSection = document.querySelector('.environment, [class*="environment"]');
+    if (envSection && !envSection.innerHTML.includes('Branch')) {{
+      const branchValue = '{branch}'; // Use the actual branch name from Python
+      const table = envSection.querySelector('table');
+      if (table) {{
+        const newRow = document.createElement('tr');
+        newRow.innerHTML = '<td>Branch</td><td>' + branchValue + '</td>';
+        table.appendChild(newRow);
+      }}
+    }}
+  }}
+}});
+</script>
+"""
+                # Add the script just before the closing body tag
+                if '</body>' in new_content:
+                    new_content = new_content.replace('</body>', date_fix_script + '</body>')
+                    logger.info("Injected date format fixing script into index.html")
             
             if new_content != content:
                 with open(html_file, 'w', encoding='utf-8') as f:
@@ -190,6 +359,83 @@ def fix_js_date_formats(report_dir: str) -> None:
                     # Extract just the part between quotes after title:
                     content = content.replace(match, f'"title":"ALLURE REPORT {today}"')
                     modified = True
+            
+            # Special case for app.js - this is where the main UI component renders
+            if os.path.basename(js_file) == 'app.js':
+                # Look for any date format in arrays or objects
+                date_format_patterns = [
+                    r'(\d{1,2})/(\d{1,2})/(\d{4})',
+                    r'(\d{1,2})-(\d{1,2})-(\d{4})'
+                ]
+                
+                for pattern in date_format_patterns:
+                    date_matches = re.finditer(pattern, content)
+                    for match in date_matches:
+                        # Check if this looks like a date in a UI component
+                        start_pos = max(0, match.start() - 30)
+                        end_pos = min(len(content), match.end() + 30)
+                        context = content[start_pos:end_pos]
+                        
+                        # If it mentions allure, report, title, etc. it's likely our target
+                        if re.search(r'allure|report|title', context, re.IGNORECASE):
+                            month, day, year = match.groups()
+                            replacement = f"{day}-{month}-{year}"
+                            content = content.replace(match.group(0), replacement)
+                            modified = True
+                            logger.info(f"Fixed date format in app.js: {match.group(0)} -> {replacement}")
+                
+                # Also inject JS code to ensure proper date format rendering
+                if 'DOMContentLoaded' in content:
+                    # Add script to fix any dynamically rendered dates
+                    date_fix_script = """
+// Fix date formats to DD-MM-YYYY
+document.addEventListener('DOMContentLoaded', function() {
+  // Initial fix
+  fixDateFormats();
+  
+  // Also try after dynamic content loads
+  setTimeout(fixDateFormats, 1000);
+  setTimeout(fixDateFormats, 2000);
+  
+  function fixDateFormats() {
+    // Find all text nodes in the document
+    const walker = document.createTreeWalker(
+      document.body, 
+      NodeFilter.SHOW_TEXT,
+      null,
+      false
+    );
+    
+    const dateRegex = /(ALLURE\\s+REPORT\\s+)(\\d{1,2})\\/(\\d{1,2})\\/(\\d{4})/i;
+    let node;
+    
+    while(node = walker.nextNode()) {
+      const matches = node.nodeValue.match(dateRegex);
+      if (matches) {
+        const [fullMatch, prefix, month, day, year] = matches;
+        node.nodeValue = node.nodeValue.replace(
+          fullMatch,
+          `${prefix}${day}-${month}-${year}`
+        );
+      }
+    }
+    
+    // Also look for dates in the header
+    const headerEls = document.querySelectorAll('header, .header, h1, h2, h3, [class*="header"]');
+    headerEls.forEach(el => {
+      if (el.innerText && dateRegex.test(el.innerText)) {
+        el.innerText = el.innerText.replace(dateRegex, `$1$3-$2-$4`);
+      }
+    });
+  }
+});
+"""
+                    # Inject our script at the end, before the closing script tag
+                    if '</script>' in content:
+                        parts = content.rsplit('</script>', 1)
+                        content = parts[0] + date_fix_script + '</script>' + parts[1]
+                        modified = True
+                        logger.info("Injected date format fixing script into app.js")
             
             if modified:
                 with open(js_file, 'w', encoding='utf-8') as f:
