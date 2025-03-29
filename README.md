@@ -291,6 +291,18 @@ All reports are saved in the `reports/` directory with the following structure:
 - **Allure Results**: `reports/allure-results/`
 - **Allure Reports**: `reports/allure-report/`
 
+### Online Report Access
+
+The latest Allure report is automatically published to GitHub Pages and can be viewed at:
+- [https://alex-wahl.github.io/Testopus](https://alex-wahl.github.io/Testopus)
+
+This site is updated automatically after each successful test run through CI/CD. The report includes:
+- Test results summary
+- Detailed test execution information
+- Environment details
+- Screenshots of failed tests
+- Test history and trends
+
 ## Configuration
 
 Tests can be configured using YAML files and command-line options.
@@ -375,6 +387,8 @@ Testopus includes GitHub Actions workflow configuration for continuous integrati
 - Docker integration for consistent execution
 - Caching to optimize build times
 - Manual workflow triggering with custom parameters
+
+For more details about the CI/CD setup and customization scripts, see the [CI documentation](ci/README.md).
 
 ## Extensibility
 
