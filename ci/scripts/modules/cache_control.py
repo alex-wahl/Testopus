@@ -5,9 +5,9 @@ This module provides functions for adding cache control directives to Allure rep
 configuring caching behavior when reports are served via HTTP.
 """
 
-import os
 import glob
 import logging
+import os
 from pathlib import Path
 from typing import List
 

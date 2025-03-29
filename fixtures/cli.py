@@ -17,14 +17,14 @@ def pytest_addoption(parser):
                      help="Possible frameworks: selenium, playwright")
     parser.addoption("--ai", required=False, action="store_true", default=False,
                      help="Flag to use AI")
-    
+
 
 @pytest.fixture(scope='session')
 def config(request) -> dict:
     """
     Fixture that provides configuration for tests.
     Uses load_config_from_cli to handle configuration loading and merging.
-    
+
     :param request: The pytest request object
     :return: Configuration dictionary
     """

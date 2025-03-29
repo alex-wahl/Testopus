@@ -2,7 +2,7 @@
 document.addEventListener('DOMContentLoaded', function() {
     // Add branch data attribute to body
     document.body.setAttribute('data-branch', '{{BRANCH_NAME}}');
-    
+
     // Fix 404 errors on tab navigation
     var handleAnchorClick = function(e) {
         var href = e.target.getAttribute('href');
@@ -17,7 +17,7 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }
     };
-    
+
     // Add listeners to tab navigation links
     var tabLinks = document.querySelectorAll('.allure-tabs a');
     tabLinks.forEach(function(link) {

@@ -5,8 +5,8 @@ This module provides functions for handling errors and missing data in Allure re
 ensuring the reports are resilient against broken links and missing resources.
 """
 
-import os
 import logging
+import os
 from pathlib import Path
 
 # Set up logging

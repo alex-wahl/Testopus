@@ -13,7 +13,7 @@ flowchart TD
     E -->|Yes| F[Customize Report]
     E -->|No| D
     D --> F
-    
+
     subgraph "Customization Process"
     F --> G0[Preserve History]
     G0 --> G1[Fix Date Formats]
@@ -23,7 +23,7 @@ flowchart TD
     G4 --> G5[Create .nojekyll]
     G5 --> G6[Update History Storage]
     end
-    
+
     G6 --> H[Deploy to GitHub Pages]
     H --> I[Comment on PR]
     I --> J[End Workflow]
@@ -95,4 +95,4 @@ The history data is stored as a GitHub Actions artifact named `allure-history` w
 | js/date_formatter.js | JavaScript for dynamic date formatting |
 | js/branch_position.js | JavaScript for branch info positioning |
 | js/inline_date_formatter.js | JavaScript for inline date formatting |
-| reports/allure-history/ | Storage directory for test execution history | 
+| reports/allure-history/ | Storage directory for test execution history |

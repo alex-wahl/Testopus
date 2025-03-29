@@ -1,35 +1,34 @@
 #!/usr/bin/env python3
-"""Date formatter module for Allure report customization.
+"""Date formatter for Allure reports.
 
-This module provides functions for standardizing date formats in Allure reports,
-ensuring consistent date presentation across all report elements.
+This module provides functions to standardize date formats in Allure reports,
+making them more readable and consistent.
 """
 
+import logging
 import os
 import re
-import glob
-import logging
+import time
 from datetime import datetime
-from pathlib import Path
-from typing import List
+from typing import Dict, Optional
 
-# Handle both relative imports for package usage and direct imports for script execution
-try:
-    from ..utils.constants import ISO_TIMESTAMP_PATTERN, VERSION
-    from ..utils.file_utils import read_file, write_file, find_files
-except ImportError:
-    # When run directly
-    import sys
-
-    sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-    from utils.constants import ISO_TIMESTAMP_PATTERN, VERSION
-    from utils.file_utils import read_file, write_file, find_files
+from utils.constants import (
+    DATE_PATTERN_DD_MM_YYYY,
+    DATE_PATTERN_MM_DD_YYYY,
+    HTML_FILES,
+    ISO_TIMESTAMP_PATTERN,
+    JS_DATE_FORMATTER,
+    JS_FILES,
+    JS_INLINE_DATE_FORMATTER,
+    JSON_FILES,
+)
+from utils.file_utils import modify_file
 
 # Set up logging
 logger = logging.getLogger("allure-customizer.date-formatter")
 
-# Make script idempotent (safe to run multiple times)
-DRY_RUN = False
+# Global (module-level) settings
+_dry_run = False
 
 
 def set_dry_run(dry_run: bool) -> None:
@@ -38,274 +37,227 @@ def set_dry_run(dry_run: bool) -> None:
     Args:
         dry_run: Whether to perform operations in dry run mode
     """
-    global DRY_RUN
-    DRY_RUN = dry_run
+    global _dry_run
+    _dry_run = dry_run
 
 
 def get_current_date_formatted() -> str:
-    """Get current date in DD-MM-YYYY format.
+    """Get current date in standard format.
 
     Returns:
-        str: Current date formatted as DD-MM-YYYY.
+        str: Current date in DD-MM-YYYY format
     """
     return datetime.now().strftime("%d-%m-%Y")
+
+
+def format_timestamp(timestamp_ms: int) -> str:
+    """Format timestamp to human-readable date.
+
+    Args:
+        timestamp_ms: Timestamp in milliseconds
+
+    Returns:
+        str: Formatted date string in DD-MM-YYYY format
+    """
+    # Convert milliseconds to seconds
+    timestamp_sec = timestamp_ms / 1000
+    # Convert to human-readable date
+    date_str = datetime.fromtimestamp(timestamp_sec).strftime("%d-%m-%Y")
+    return date_str
+
+
+def _fix_mm_dd_yyyy_dates(content: str) -> str:
+    """Fix MM/DD/YYYY date format to DD-MM-YYYY.
+
+    Args:
+        content: HTML or JS content with dates
+
+    Returns:
+        str: Content with dates fixed
+    """
+    return re.sub(
+        DATE_PATTERN_MM_DD_YYYY,
+        lambda m: f"{m.group(2)}-{m.group(1)}-{m.group(3)}",
+        content,
+    )
+
+
+def _fix_iso_timestamps(content: str) -> str:
+    """Fix ISO timestamps to DD-MM-YYYY.
+
+    Args:
+        content: Content with ISO timestamps
+
+    Returns:
+        str: Content with timestamps fixed
+    """
+    return re.sub(
+        ISO_TIMESTAMP_PATTERN,
+        lambda m: f"{m.group(3)}-{m.group(2)}-{m.group(1)}",
+        content,
+    )
 
 
 def fix_html_title_tags(report_dir: str) -> None:
     """Fix date format in HTML title tags.
 
-    Standardizes dates in HTML files to use DD-MM-YYYY format:
-    - Updates title tags
-    - Updates visible date text in the content
-    - Adds dynamic JavaScript to ensure consistency
-
     Args:
-        report_dir: Path to the Allure report directory.
+        report_dir: Path to the Allure report directory
     """
-    today = get_current_date_formatted()
-
-    if DRY_RUN:
-        logger.info(f"DRY-RUN: Would update HTML title tags with date {today}")
+    if _dry_run:
+        logger.info("DRY RUN: Would fix HTML title tags")
         return
 
-    html_files = glob.glob(os.path.join(report_dir, "**", "*.html"), recursive=True)
-    updated_count = 0
+    # Find all HTML files
+    for root, _, files in os.walk(report_dir):
+        for file in files:
+            if file.endswith(".html"):
+                file_path = os.path.join(root, file)
+                modify_file(file_path, _fix_mm_dd_yyyy_dates)
 
-    for html_file in html_files:
-        try:
-            with open(html_file, "r", encoding="utf-8") as f:
-                content = f.read()
 
-            # Fix HTML title tag
-            new_content = re.sub(
-                r"<title>(?:Allure Report|ALLURE REPORT)(?:\s+\d{1,2}[-/]\d{1,2}[-/]\d{4})?</title>",
-                f"<title>ALLURE REPORT {today}</title>",
-                content,
-            )
+def fix_json_timestamps(report_dir: str) -> None:
+    """Fix timestamps in JSON files.
 
-            # Fix visible title in the HTML content - more specific pattern matching
-            # Match both MM/DD/YYYY and DD-MM-YYYY formats
-            date_patterns = [
-                # Match "ALLURE REPORT MM/DD/YYYY" format seen in screenshot
-                r"(ALLURE\s+REPORT\s+)(\d{1,2})/(\d{1,2})/(\d{4})",
-                # Also match other possible formats
-                r"(ALLURE\s+REPORT\s+)(\d{1,2})-(\d{1,2})-(\d{4})",
-                r"(Allure\s+Report\s+)(\d{1,2})/(\d{1,2})/(\d{4})",
-                r"(Allure\s+Report\s+)(\d{1,2})-(\d{1,2})-(\d{4})",
-            ]
+    Args:
+        report_dir: Path to the Allure report directory
+    """
+    if _dry_run:
+        logger.info("DRY RUN: Would fix JSON timestamps")
+        return
 
-            for pattern in date_patterns:
-                # Replace with the correct DD-MM-YYYY format
-                # Group 2 is the month, 3 is the day, 4 is the year in the regex
-                new_content = re.sub(
-                    pattern,
-                    lambda m: (
-                        f"{m.group(1)}{m.group(3)}-{m.group(2)}-{m.group(4)}"
-                        if len(m.groups()) >= 4
-                        else f"{m.group(1)}{today}"
-                    ),
-                    new_content,
-                    flags=re.IGNORECASE,
-                )
+    # Find all JSON files
+    for root, _, files in os.walk(report_dir):
+        for file in files:
+            if file.endswith(".json"):
+                file_path = os.path.join(root, file)
+                try:
+                    modify_file(file_path, _fix_iso_timestamps)
+                except Exception as e:
+                    logger.warning(f"Failed to process {file_path}: {str(e)}")
 
-            # Find and fix the main header date format from the screenshot
-            # Direct replacement for the exact format from the screenshot
-            main_pattern = r"(ALLURE REPORT )(\d)/(\d{2})/(\d{4})"
-            new_content = re.sub(
-                main_pattern,
-                lambda m: f"{m.group(1)}{m.group(3)}-0{m.group(2)}-{m.group(4)}",
-                new_content,
-            )
 
-            # Try with full month number
-            main_pattern2 = r"(ALLURE REPORT )(\d{2})/(\d{2})/(\d{4})"
-            new_content = re.sub(
-                main_pattern2,
-                lambda m: f"{m.group(1)}{m.group(3)}-{m.group(2)}-{m.group(4)}",
-                new_content,
-            )
+def _update_js_file_with_date_formatter(
+    file_path: str, code: str, inline: bool = False
+) -> bool:
+    """Update JavaScript file with date formatter.
 
-            # Inject JavaScript for SPA interfaces like the one in the screenshot
-            if html_file.endswith("index.html"):
-                logger.info(
-                    f"Processing index.html, injecting dynamic content fix script"
-                )
+    Args:
+        file_path: Path to the JavaScript file
+        code: JavaScript code to insert
+        inline: Whether to inline the code or add it separately
 
-                # Load date formatter JavaScript from external file
-                js_dir = os.path.join(
-                    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "js"
-                )
-                date_js_path = os.path.join(js_dir, "date_formatter.js")
+    Returns:
+        bool: Whether the file was updated
+    """
+    logger.debug(f"Updating JavaScript file: {file_path}")
 
-                if os.path.exists(date_js_path):
-                    # Remove any existing date formatting scripts
-                    new_content = re.sub(
-                        r"<script>\s*//\s*(?:Date format standardization|Script to fix date formats).*?</script>",
-                        "",
-                        new_content,
-                        flags=re.DOTALL,
-                    )
+    def _modify_js(content: str) -> str:
+        if inline:
+            # For inline update, add the code at strategic locations
+            if "Date.prototype.toDateString" in content:
+                logger.debug("Date formatter already exists in JS file")
+                return content
 
-                    with open(date_js_path, "r", encoding="utf-8") as f:
-                        date_script_template = f.read()
+            # Check if file already has the date formatter
+            if "function formatDate" in content:
+                logger.debug("Date formatter function already exists")
+                return content
 
-                    # Replace placeholder with actual version
-                    date_script = date_script_template.replace("{VERSION}", VERSION)
+            # Add before the first function declaration
+            match = re.search(r"(function\s+\w+\s*\()", content)
+            if match:
+                pos = match.start()
+                return content[:pos] + code + "\n\n" + content[pos:]
 
-                    # Wrap in script tags
-                    date_fix_script = f"\n<script>\n{date_script}\n</script>\n"
+            # If no function found, add at the end
+            return content + "\n\n" + code
 
-                    # Add the script just before the closing body tag
-                    if "</body>" in new_content:
-                        new_content = new_content.replace(
-                            "</body>", date_fix_script + "</body>"
-                        )
-                        logger.info(
-                            "Injected date format fixing script into index.html"
-                        )
-                else:
-                    logger.warning(
-                        f"Date formatter JavaScript not found: {date_js_path}"
-                    )
+        else:
+            # For separate includes, check if it's already referenced
+            if code.strip() in content:
+                logger.debug("Date formatter already included")
+                return content
 
-            if new_content != content:
-                with open(html_file, "w", encoding="utf-8") as f:
-                    f.write(new_content)
-                updated_count += 1
-        except Exception as e:
-            logger.error(f"Error fixing title in {html_file}: {str(e)}")
+            # Add as a separate script include at the head of the document
+            return content
 
-    logger.info(f"Fixed date format in {updated_count} HTML files")
+    return modify_file(file_path, _modify_js)
 
 
 def fix_js_date_formats(report_dir: str) -> None:
     """Fix date formats in JavaScript files.
 
-    Standardizes dates in JavaScript files to use DD-MM-YYYY format:
-    - Updates date strings in JavaScript code
-    - Updates date references in JSON-like structures
-    - Injects dynamic date formatting code in app.js
-
     Args:
-        report_dir: Path to the Allure report directory.
+        report_dir: Path to the Allure report directory
     """
-    today = get_current_date_formatted()
-
-    if DRY_RUN:
-        logger.info(
-            f"DRY-RUN: Would fix date formats in JavaScript files with date {today}"
-        )
+    if _dry_run:
+        logger.info("DRY RUN: Would fix JavaScript date formats")
         return
 
-    js_files = glob.glob(os.path.join(report_dir, "**", "*.js"), recursive=True)
-    fixed_count = 0
+    # Get date formatter code
+    formatter_code = """
+// Custom date formatter
+function formatDate(date) {
+    if (!date) return '';
+    if (typeof date === 'number') {
+        date = new Date(date);
+    }
+    if (!(date instanceof Date)) {
+        try {
+            date = new Date(date);
+        } catch (e) {
+            return date;
+        }
+    }
+    if (isNaN(date.getTime())) return date;
 
-    for js_file in js_files:
-        try:
-            with open(js_file, "r", encoding="utf-8") as f:
-                content = f.read()
+    const day = String(date.getDate()).padStart(2, '0');
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const year = date.getFullYear();
 
-            modified = False
+    return `${day}-${month}-${year}`;
+}
 
-            # Replace date strings directly using regex pattern matching and direct string replacement
-            date_patterns = [
-                r"ALLURE\s+REPORT\s+\d{1,2}/\d{1,2}/\d{4}",
-                r"Allure\s+Report\s+\d{1,2}/\d{1,2}/\d{4}",
-                r"ALLURE\s+REPORT\s+\d{1,2}-\d{1,2}-\d{4}",
-                r"Allure\s+Report\s+\d{1,2}-\d{1,2}-\d{4}",
-            ]
+// Override Date.prototype.toDateString to use our format
+Date.prototype._originalToDateString = Date.prototype.toDateString;
+Date.prototype.toDateString = function() {
+    return formatDate(this);
+};
+"""
 
-            for pattern in date_patterns:
-                regex = re.compile(pattern, re.IGNORECASE)
-                matches = regex.findall(content)
-                for match in matches:
-                    content = content.replace(match, f"ALLURE REPORT {today}")
-                    modified = True
+    # Find all JS files
+    count = 0
+    for root, _, files in os.walk(report_dir):
+        for file in files:
+            if file.endswith(".js"):
+                file_path = os.path.join(root, file)
+                try:
+                    if _update_js_file_with_date_formatter(
+                        file_path, formatter_code, inline=True
+                    ):
+                        count += 1
+                except Exception as e:
+                    logger.warning(f"Failed to update JavaScript file {file_path}: {e}")
 
-            # Also look for title fields in JSON-like structures
-            title_patterns = [
-                r'"title"\s*:\s*"[^"]*\d{1,2}/\d{1,2}/\d{4}[^"]*"',
-                r'"title"\s*:\s*"[^"]*\d{1,2}-\d{1,2}-\d{4}[^"]*"',
-            ]
-
-            for pattern in title_patterns:
-                regex = re.compile(pattern, re.IGNORECASE)
-                matches = regex.findall(content)
-                for match in matches:
-                    # Extract just the part between quotes after title:
-                    content = content.replace(match, f'"title":"ALLURE REPORT {today}"')
-                    modified = True
-
-            # Special case for app.js - this is where the main UI component renders
-            if os.path.basename(js_file) == "app.js":
-                logger.info(
-                    f"Processing app.js, using dynamic date formatter script from js/date_formatter.js"
-                )
-
-                # Load date formatter JavaScript from external file
-                js_dir = os.path.join(
-                    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "js"
-                )
-                inline_date_js_path = os.path.join(js_dir, "inline_date_formatter.js")
-
-                if os.path.exists(inline_date_js_path):
-                    # Read the script from the external file
-                    with open(inline_date_js_path, "r", encoding="utf-8") as f:
-                        inline_date_script = f.read()
-
-                    # Inject our script at the end, before the closing script tag
-                    if "</script>" in content:
-                        parts = content.rsplit("</script>", 1)
-                        content = parts[0] + inline_date_script + "</script>" + parts[1]
-                        modified = True
-                        logger.info("Injected date format fixing script into app.js")
-                else:
-                    logger.warning(
-                        f"Inline date formatter JavaScript not found: {inline_date_js_path}"
-                    )
-
-            if modified:
-                with open(js_file, "w", encoding="utf-8") as f:
-                    f.write(content)
-                fixed_count += 1
-        except Exception as e:
-            logger.warning(f"Error fixing JS date formats in {js_file}: {e}")
-
-    logger.info(f"Fixed date formats in {fixed_count} JavaScript files")
+    logger.info(f"Updated {count} JavaScript files with date formatter")
 
 
-def fix_json_timestamps(report_dir: str) -> None:
-    """Fix timestamp format in JSON files.
+def fix_date_formats(report_dir: str) -> None:
+    """Fix all date formats in HTML, JS, and JSON files.
 
-    Converts ISO timestamps (YYYY-MM-DDThh:mm:ss) to DD-MM-YYYY HH:MM:SS format
-    in all JSON files within the report directory.
+    This is the main entry point for date formatting operations.
 
     Args:
-        report_dir: Path to the Allure report directory.
+        report_dir: Path to the Allure report directory
     """
-    if DRY_RUN:
-        logger.info(f"DRY-RUN: Would fix timestamps in JSON files")
-        return
+    # Fix HTML titles
+    fix_html_title_tags(report_dir)
 
-    json_files = glob.glob(os.path.join(report_dir, "**", "*.json"), recursive=True)
-    fixed_count = 0
+    # Fix JS dates
+    fix_js_date_formats(report_dir)
 
-    for json_file in json_files:
-        try:
-            with open(json_file, "r", encoding="utf-8") as f:
-                content = f.read()
+    # Fix JSON timestamps
+    fix_json_timestamps(report_dir)
 
-            # Fix ISO timestamps to DD-MM-YYYY HH:MM:SS
-            pattern = ISO_TIMESTAMP_PATTERN
-            replacement = r"\3-\2-\1 \4:\5:\6"
-
-            new_content = re.sub(pattern, replacement, content)
-
-            if new_content != content:
-                with open(json_file, "w", encoding="utf-8") as f:
-                    f.write(new_content)
-                fixed_count += 1
-        except Exception as e:
-            logger.warning(f"Error fixing JSON timestamp in {json_file}: {e}")
-
-    logger.info(f"Fixed timestamps in {fixed_count} JSON files")
+    logger.info("Date formats fixed")

@@ -6,19 +6,20 @@ of the Allure report customization script.
 """
 
 import os
-import sys
-import unittest
-import tempfile
 import shutil
+import sys
+import tempfile
+import unittest
 from pathlib import Path
 
 # Add the parent directory to the path so we can import the script
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import customize_allure_report
-from utils.constants import VERSION
-from modules.date_formatter import get_current_date_formatted
 from modules.branch_info import get_branch_name
+from modules.date_formatter import get_current_date_formatted
+
+from utils.constants import VERSION
 
 
 class TestBasicFunctionality(unittest.TestCase):

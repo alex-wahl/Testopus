@@ -5,11 +5,11 @@ This module provides functions for preserving test history between runs,
 ensuring trend data persists across test executions in CI/CD pipelines.
 """
 
+import logging
 import os
 import shutil
-import logging
-from typing import Optional
 from pathlib import Path
+from typing import Optional
 
 # Handle both relative imports for package usage and direct imports for script execution
 try:

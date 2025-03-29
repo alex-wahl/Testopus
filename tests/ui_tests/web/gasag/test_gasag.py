@@ -15,7 +15,7 @@ def log_retry(attempt, exception, *args, **kwargs):
 
 class TestGasag:
     """Test suite for Gasag"""
-    
+
     BASE_URL = None
     USERNAME = None
     PASSWORD = None
@@ -99,37 +99,37 @@ class TestGasag:
         login_page.wait_until_page_is_fully_loaded()
         new_url = login_page.get_current_url()
         assert current_url != new_url, f"Redirect to {new_url} failed"
-    
+
     @retry(retries=3, delay=2, on_retry=log_retry)
     def test_google_login_wording(self, login_page):
         login_page.wait_for_element(LoginPage.GOOGLE_LOGIN)
         login_page.click(LoginPage.GOOGLE_LOGIN)
-        
+
         # Use the same improved selector approach
         google_text = login_page.execute_script("""
             // Use a more specific selector for the Google button
             var googleSection = document.querySelector('button.google-btn.social-btn').nextElementSibling;
             return googleSection ? googleSection.querySelector('label').textContent : '';
         """)
-        
+
         for phrase in LoginPage.TEXT_GOOGLE_KEY_PHRASES:
             check.is_in(phrase, google_text, f"Expected phrase '{phrase}' not found in Google login text")
-    
+
     @retry(retries=3, delay=2, on_retry=log_retry)
     def test_apple_login_wording(self, login_page):
         login_page.wait_for_element(LoginPage.APPLE_LOGIN)
         login_page.click(LoginPage.APPLE_LOGIN)
-        
+
         # Fix the selector to target Apple button more precisely
         apple_text = login_page.execute_script("""
             // Use a more specific selector for the Apple button
             var appleSection = document.querySelector('button.apple-btn.social-btn').nextElementSibling;
             return appleSection ? appleSection.querySelector('label').textContent : '';
         """)
-        
+
         for phrase in LoginPage.TEXT_APPLE_KEY_PHRASES:
             check.is_in(phrase, apple_text, f"Expected phrase '{phrase}' not found in Apple login text")
-    
+
     @retry(retries=3, delay=2, on_retry=log_retry)
     def test_google_login(self, login_page):
         login_page.wait_for_element(LoginPage.GOOGLE_LOGIN)
@@ -138,7 +138,7 @@ class TestGasag:
         current_url = login_page.get_current_url()
         login_page.click(LoginPage.GOOGLE_CONTINUE_BUTTON)
         assert login_page.wait_for_url_change(current_url), f"Redirect to {current_url} failed"
-    
+
     @retry(retries=3, delay=2, on_retry=log_retry)
     def test_apple_login(self, login_page):
         login_page.wait_for_element(LoginPage.APPLE_LOGIN)

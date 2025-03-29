@@ -5,11 +5,11 @@ This module provides common file operations used in the Allure report customizat
 with consistent error handling and logging.
 """
 
-import os
 import glob
 import logging
+import os
 import shutil
-from typing import Optional, List, Dict, Any, Union, Tuple
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 # Set up logging
 logger = logging.getLogger("allure-customizer.file-utils")

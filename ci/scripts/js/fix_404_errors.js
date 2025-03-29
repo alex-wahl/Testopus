@@ -7,16 +7,16 @@ document.addEventListener('DOMContentLoaded', function() {
             // If request is for a test result and fails with 404
             if (response.status === 404 && url.includes('/data/test-cases/')) {
                 console.warn('Test result not found:', url);
-                
+
                 // Create a minimal valid test result to prevent UI errors
                 return new Response(JSON.stringify({
                     uid: url.split('/').pop(),
                     name: 'Test result not available',
                     status: 'unknown',
                     time: { start: 0, stop: 0, duration: 0 },
-                    statusDetails: { 
+                    statusDetails: {
                         message: 'This test result is no longer available in the report.',
-                        trace: 'The test data may have been removed or the ID changed between test runs.' 
+                        trace: 'The test data may have been removed or the ID changed between test runs.'
                     }
                 }), {
                     status: 200,
@@ -26,7 +26,7 @@ document.addEventListener('DOMContentLoaded', function() {
             return response;
         });
     };
-    
+
     // Also handle direct navigation to test cases that don't exist
     var handleMissingTest = function(e) {
         if (e.target.classList.contains('test-case')) {
@@ -37,7 +37,7 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }
     };
-    
+
     // Add click handler to test-result links
     document.addEventListener('click', handleMissingTest, true);
 });

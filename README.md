@@ -311,10 +311,10 @@ def test_login():
     with allure.step("Enter credentials"):
         # Test code
         allure.attach("username/password", "Credentials", allure.attachment_type.TEXT)
-    
+
     with allure.step("Click login button"):
         # More test code
-        
+
     with allure.step("Verify successful login"):
         # Verification
         assert True

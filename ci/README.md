@@ -145,4 +145,4 @@ When adding new CI/CD components:
 5. Update `requirements.txt` if new dependencies are required
 6. Make scripts executable with `chmod +x` if they are meant to be run directly
 7. Add new steps to the GitHub Actions workflow as needed
-8. Follow the separation of concerns principle - keep code, templates, and configuration separate 
+8. Follow the separation of concerns principle - keep code, templates, and configuration separate

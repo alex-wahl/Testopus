@@ -27,7 +27,7 @@ runs:
       run: |
         # Ensure reports directory exists
         mkdir -p reports/{allure-results,html,junit,screenshots}
-        
+
         case "${{ inputs.test_suite }}" in
           "ui")
             docker compose -f docker/docker-compose.yml run --rm testopus \
@@ -61,4 +61,4 @@ runs:
               --junitxml=/app/reports/junit/report_all.xml \
               /app/tests ${{ inputs.custom_flags }}
             ;;
-        esac 
+        esac

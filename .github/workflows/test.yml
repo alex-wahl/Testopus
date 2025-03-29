@@ -48,21 +48,21 @@ jobs:
       test_suite: ${{ github.event.inputs.test_suite || 'all' }}
       debug_mode: ${{ github.event.inputs.debug_mode || 'false' }}
       custom_flags: ${{ github.event.inputs.custom_flags }}
-    
+
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-          
+
       - name: Install Hatch
         run: pip install hatch
-      
+
       - name: Install CI dependencies
         run: pip install -r ci/requirements.txt
-      
+
       # Prepare directories
       - name: Prepare directories
         run: |
@@ -72,7 +72,7 @@ jobs:
       # Setup Docker Buildx
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
-      
+
       # Cache Docker layers
       - name: Cache Docker layers
         uses: actions/cache@v4
@@ -81,7 +81,7 @@ jobs:
           key: ${{ runner.os }}-buildx-${{ github.sha }}
           restore-keys: |
             ${{ runner.os }}-buildx-
-      
+
       # Build Docker image with better error handling
       - name: Build Docker image
         uses: docker/build-push-action@v5
@@ -93,7 +93,7 @@ jobs:
           tags: testopus:latest
           cache-from: type=local,src=/tmp/.buildx-cache
           cache-to: type=local,dest=/tmp/.buildx-cache-new,mode=max
-      
+
       # Verify Docker image was built
       - name: Verify Docker image
         run: |
@@ -105,44 +105,44 @@ jobs:
             echo "Docker image exists:"
             docker images | grep testopus
           fi
-      
+
       # Move cache for performance
       - name: Move cache
         run: |
           rm -rf /tmp/.buildx-cache
           mv /tmp/.buildx-cache-new /tmp/.buildx-cache
-      
+
       - name: List test directories
         run: find tests -type f -name "test_*.py" | sort
-  
+
   # Run tests
   test:
     needs: setup
     runs-on: ubuntu-latest
-    
+
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      
-      - name: Install dependencies 
+
+      - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r ci/requirements.txt
-      
+
       # Create CI directories
       - name: Create CI directories
         run: |
           mkdir -p reports/{allure-results,html,junit,screenshots,allure-report,allure-history}
           chmod -R 777 reports
-      
+
       # Setup Docker Buildx
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
-      
+
       # Cache Docker layers
       - name: Cache Docker layers
         uses: actions/cache@v4
@@ -151,7 +151,7 @@ jobs:
           key: ${{ runner.os }}-buildx-${{ github.sha }}
           restore-keys: |
             ${{ runner.os }}-buildx-
-      
+
       # Build Docker image with local build fallback
       - name: Build Docker image (with fallback)
         run: |
@@ -160,7 +160,7 @@ jobs:
             echo "Building Docker image locally..."
             docker build -t testopus:latest -f ./docker/Dockerfile .
           fi
-      
+
       # Verify Docker image exists before running tests
       - name: Verify Docker image
         run: |
@@ -172,22 +172,22 @@ jobs:
             echo "Docker image exists:"
             docker images | grep testopus
           fi
-      
+
       # Debug Docker system information
       - name: Docker debug info
         run: |
           docker info
           docker version
-      
+
       # Try to run a simple Docker container first
       - name: Test Docker functionality
         run: |
           echo "Testing Docker with a simple container..."
           docker run --rm hello-world
-          
+
           echo "Testing access to testopus image..."
           docker images | grep testopus || echo "Testopus image not found"
-      
+
       # Skip Docker-based tests in CI for now
       - name: Create mock test results
         run: |
@@ -205,14 +205,14 @@ jobs:
             "stop": 1585124599625
           }
           EOF
-      
+
       # Clean up containers
       - name: Clean up containers
         if: always()
         run: |
           docker ps -a
           docker compose -f docker/docker-compose.yml down --remove-orphans || true
-      
+
       # Verify test artifacts
       - name: Verify test artifacts
         if: always()
@@ -225,12 +225,12 @@ jobs:
           ls -la reports/junit/ || echo "No junit directory"
           echo "=== Screenshots ==="
           ls -la reports/screenshots/ || echo "No screenshots directory"
-      
+
       # Create artifacts directory if it doesn't exist
       - name: Create artifacts directory
         if: always()
         run: mkdir -p reports/{allure-results,html,junit,screenshots,allure-report,allure-history}
-      
+
       # Upload test results as artifacts
       - name: Upload test results
         if: always()
@@ -239,31 +239,31 @@ jobs:
           name: test-results
           path: reports/
           retention-days: 1  # Short retention as these will be processed by report job
-  
+
   # Generate reports
   report:
     needs: [setup, test]
     runs-on: ubuntu-latest
     if: always()
-    
+
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      
+
       - name: Install CI dependencies
         run: pip install -r ci/requirements.txt
-      
+
       # Download test results
       - name: Download test results
         uses: actions/download-artifact@v4
         with:
           name: test-results
           path: reports/
-      
+
       # Create empty history if needed
       - name: Create empty history if needed
         run: |
@@ -276,7 +276,7 @@ jobs:
             echo "{}" > reports/allure-history/retries-trend.json
             echo "{}" > reports/allure-history/history-trend.json
           fi
-      
+
       # Download previous test history
       - name: Download previous test history
         uses: actions/download-artifact@v4
@@ -284,13 +284,13 @@ jobs:
         with:
           name: allure-history
           path: reports/allure-history
-      
+
       # Install allure-commandline
       - name: Set up Allure
         run: |
           wget -O allure-commandline.zip https://repo.maven.apache.org/maven2/io/qameta/allure/allure-commandline/2.24.0/allure-commandline-2.24.0.zip
           unzip allure-commandline.zip
-      
+
       # Generate Allure report
       - name: Generate Allure Report
         run: |
@@ -300,13 +300,13 @@ jobs:
             mkdir -p reports/allure-results/history
             cp -r reports/allure-history/* reports/allure-results/history/ || true
           fi
-          
+
           # Generate the report
           ./allure-2.24.0/bin/allure generate reports/allure-results -o reports/allure-report --clean
-          
+
           # Customize the report
           python3 ci/scripts/customize_allure_report.py --history
-          
+
           # Save history for future runs
           mkdir -p reports/allure-history
           if [ -d "reports/allure-report/history" ]; then
@@ -319,7 +319,7 @@ jobs:
           ALLURE_PRESERVE_HISTORY: true
           GITHUB_REF: ${{ github.ref }}
           GITHUB_HEAD_REF: ${{ github.head_ref }}
-      
+
       # Upload test history
       - name: Upload test history
         uses: actions/upload-artifact@v4
@@ -327,7 +327,7 @@ jobs:
           name: allure-history
           path: reports/allure-history/
           retention-days: 90
-      
+
       # Upload test reports
       - name: Upload test reports
         uses: actions/upload-artifact@v4
@@ -340,7 +340,7 @@ jobs:
             reports/allure-results/
             reports/allure-report/
           retention-days: 90
-          
+
       # Publish test results
       - name: Publish Test Results
         uses: EnricoMi/publish-unit-test-result-action@v2
@@ -348,30 +348,30 @@ jobs:
         with:
           files: reports/junit/report*.xml
           check_name: Test Results
-  
+
   # Deploy to GitHub Pages
   deploy:
     needs: report
     runs-on: ubuntu-latest
     if: always()
-    
+
     steps:
       - uses: actions/checkout@v4
-      
+
       # Download report
       - name: Download report
         uses: actions/download-artifact@v4
         with:
           name: test-reports
           path: reports/
-      
+
       # Upload GitHub Pages artifact
       - name: Upload GitHub Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
           path: reports/allure-report
           retention-days: 90
-      
+
       # Deploy to reporting branch
       - name: Deploy to reporting branch
         uses: peaceiris/actions-gh-pages@v3
@@ -386,7 +386,7 @@ jobs:
           user_name: "github-actions[bot]"
           user_email: "github-actions[bot]@users.noreply.github.com"
           commit_message: "docs: update Allure report [skip ci]"
-      
+
       # Comment on PR with report links
       - name: Comment PR with Report Links
         if: github.event_name == 'pull_request'
@@ -395,15 +395,15 @@ jobs:
           script: |
             const artifactUrl = `${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}`;
             let pagesUrl = `https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}`;
-            
+
             const comment = `### Test Results
-            
+
             #### Report Links:
             - [Download Test Reports](${artifactUrl})
             - [View Allure Report](${pagesUrl}) (updated with latest results)
-            
+
             *Tests run by GitHub Actions workflow*`;
-            
+
             github.rest.issues.createComment({
               issue_number: context.issue.number,
               owner: context.repo.owner,

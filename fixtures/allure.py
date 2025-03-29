@@ -11,10 +11,10 @@ from pathlib import Path
 @pytest.fixture(scope="session", autouse=True)
 def setup_directories():
     """Set up report directories at the start of test session.
-    
+
     Creates the necessary directory structure for reports including
     allure-results, html reports, and screenshots.
-    
+
     Returns:
         None
     """
@@ -30,12 +30,12 @@ def setup_directories():
 @pytest.hookimpl(trylast=True)
 def pytest_configure(config):
     """Add metadata to HTML reports.
-    
+
     Configures HTML report with additional metadata if pytest-html is installed.
-    
+
     Args:
         config: The pytest config object.
-        
+
     Returns:
         None
     """
@@ -54,20 +54,20 @@ def pytest_configure(config):
 @pytest.hookimpl(tryfirst=True, hookwrapper=True)
 def pytest_runtest_makereport(item, call):
     """Capture test status for each phase.
-    
+
     Stores the test result for setup, call, and teardown phases
     as attributes on the test item.
-    
+
     Args:
         item: The test item being executed.
         call: The call information.
-        
+
     Yields:
         The hookwrapper.
     """
     outcome = yield
     report = outcome.get_result()
-    
+
     # Store the test result for each phase
     setattr(item, f"report_{report.when}", report)
 
@@ -75,19 +75,19 @@ def pytest_runtest_makereport(item, call):
 @pytest.hookimpl(trylast=True)
 def pytest_runtest_teardown(item):
     """Capture screenshot on test failure if driver is available.
-    
+
     Attempts to find a webdriver instance and take a screenshot when
     a test fails, then attaches it to the Allure report.
-    
+
     Args:
         item: The test item being torn down.
-        
+
     Returns:
         None
     """
     if not hasattr(item, "report_call") or not item.report_call.failed:
         return
-    
+
     # Try to find a webdriver instance
     driver = None
     for name in ["driver", "browser", "page", "selenium"]:
@@ -97,19 +97,19 @@ def pytest_runtest_teardown(item):
                 break
         except:
             continue
-    
+
     if not driver:
         return
-        
+
     try:
         # Create timestamp and screenshot filename
         timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
         test_name = item.nodeid.replace("/", "_").replace("::", "_")
         screenshot_path = f"reports/screenshots/{test_name}_{timestamp}.png"
-        
+
         # Save screenshot
         driver.save_screenshot(screenshot_path)
-        
+
         # Attach to Allure report
         with open(screenshot_path, "rb") as f:
             allure.attach(
@@ -117,7 +117,7 @@ def pytest_runtest_teardown(item):
                 name=f"Failure Screenshot",
                 attachment_type=allure.attachment_type.PNG
             )
-            
+
         print(f"Screenshot saved to {screenshot_path}")
     except Exception as e:
         print(f"Failed to capture screenshot: {e}")
@@ -126,18 +126,18 @@ def pytest_runtest_teardown(item):
 @pytest.hookimpl(trylast=True)
 def pytest_sessionfinish(session):
     """Add environment information to Allure report.
-    
+
     Creates an environment.properties file containing browser, OS, Python version,
     and timestamp information for the Allure report.
-    
+
     Args:
         session: The pytest session object.
-        
+
     Returns:
         None
     """
     env_file = Path("reports/allure-results/environment.properties")
-    
+
     # Get browser info if available
     browser_name = os.environ.get("BROWSER", "Chrome")
     browser_version = os.environ.get("BROWSER_VERSION", "latest")
@@ -148,11 +148,11 @@ def pytest_sessionfinish(session):
         ref = os.environ.get('GITHUB_REF', '')      # For direct pushes
         if ref.startswith('refs/heads/'):
             branch = ref.replace('refs/heads/', '')
-    
+
     if not branch:
         try:
             # Try to get from git command as fallback
-            branch = subprocess.check_output(['git', 'rev-parse', '--abbrev-ref', 'HEAD'], 
+            branch = subprocess.check_output(['git', 'rev-parse', '--abbrev-ref', 'HEAD'],
                                            stderr=subprocess.DEVNULL).decode('utf-8').strip()
         except (subprocess.SubprocessError, FileNotFoundError):
             branch = 'unknown'
@@ -160,7 +160,7 @@ def pytest_sessionfinish(session):
     # Set timezone to Berlin
     os.environ['TZ'] = 'Europe/Berlin'
     time.tzset()  # Apply timezone change
-    
+
     with open(env_file, "w") as f:
         f.write(f"Browser={browser_name}\n")
         f.write(f"Browser.Version={browser_version}\n")
@@ -174,13 +174,13 @@ def pytest_sessionfinish(session):
 @pytest.hookimpl(hookwrapper=True)
 def pytest_runtest_protocol(item):
     """Add additional metadata using Allure's API.
-    
+
     Extracts test docstrings and pytest markers to populate Allure report
     with features, stories, severity levels, and tags.
-    
+
     Args:
         item: The test item being executed.
-        
+
     Yields:
         The hookwrapper.
     """
@@ -188,7 +188,7 @@ def pytest_runtest_protocol(item):
     test_doc = item.function.__doc__ or ""
     if test_doc:
         allure.dynamic.description(test_doc)
-    
+
     # Extract markers for Allure labels
     for marker in item.iter_markers():
         if marker.name == "feature":
@@ -200,5 +200,5 @@ def pytest_runtest_protocol(item):
         elif marker.name == "tag":
             for tag in marker.args:
                 allure.dynamic.tag(tag)
-    
-    yield 
+
+    yield

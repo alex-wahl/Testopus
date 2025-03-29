@@ -5,8 +5,8 @@ This module provides functions for creating a dummy report when no test results 
 ensuring a fallback view for CI/CD pipelines with empty or missing test results.
 """
 
-import os
 import logging
+import os
 from datetime import datetime
 from pathlib import Path
 
@@ -20,9 +20,10 @@ except ImportError:
     import sys
 
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-    from utils.file_utils import ensure_dir_exists
     from modules.cache_control import add_cache_control, create_nojekyll_file
     from modules.date_formatter import get_current_date_formatted
+
+    from utils.file_utils import ensure_dir_exists
 
 # Set up logging
 logger = logging.getLogger("allure-customizer.dummy-report")

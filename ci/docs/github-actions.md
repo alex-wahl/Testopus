@@ -204,10 +204,10 @@ This step:
     if [ -d "reports/allure-results" ] && [ "$(ls -A reports/allure-results)" ]; then
       # Set timezone to Berlin
       export TZ=Europe/Berlin
-      
+
       # Generate the report
       ./allure-2.24.0/bin/allure generate reports/allure-results -o reports/allure-report --clean
-      
+
       # Check if report generation was successful
       if [ $? -ne 0 ]; then
         echo "::warning::Allure report generation failed, creating dummy report"
@@ -308,15 +308,15 @@ These steps:
     script: |
       const artifactUrl = `${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}`;
       let pagesUrl = `https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}`;
-      
+
       const comment = `### Test Results
-      
+
       #### Report Links:
       - [Download Test Reports](${artifactUrl})
       - [View Allure Report](${pagesUrl}) (updated with latest results)
-      
+
       *Tests run by GitHub Actions workflow*`;
-      
+
       github.rest.issues.createComment({
         issue_number: context.issue.number,
         owner: context.repo.owner,
@@ -402,4 +402,4 @@ If GitHub Pages deployment fails:
 1. Verify GitHub Pages is enabled for the repository
 2. Check the 'reporting' branch exists and is configured as a Pages source
 3. Ensure the workflow has appropriate permissions
-4. Check for errors in the GitHub Pages deployment logs 
+4. Check for errors in the GitHub Pages deployment logs
