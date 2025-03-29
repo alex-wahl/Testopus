@@ -51,14 +51,21 @@ def create_cache_busting_script(report_dir: str, timestamp: int) -> None:
     
     script_content = f"""// Cache-busting script generated on {datetime.now().isoformat()}
 document.addEventListener('DOMContentLoaded', function() {{
-  // Cache busting redirect
-  if(!window.location.search.includes('ts=')) {{
+  // Only redirect if no timestamp parameter exists
+  // Check for any timestamp parameter to avoid redirect loops
+  if(!window.location.search.includes('ts=') && 
+     !window.location.search.includes('timestamp=') && 
+     !window.location.search.includes('t=')) {{
+    
+    // Use current time rather than server timestamp to avoid hardcoded values
+    const currentTime = new Date().getTime();
     window.location.href = window.location.href + 
       (window.location.search ? '&' : '?') + 
-      'ts={timestamp}';
+      'ts=' + currentTime;
+    return; // Stop execution to prevent the rest of the script from running during redirect
   }}
   
-  // Fix title date format if found
+  // Fix title date format if found - only runs if we're NOT redirecting
   try {{
     const titleElements = document.querySelectorAll('.allure-report-title, .title, h1');
     const dateRegex = /(ALLURE\\s+REPORT\\s+)(\\d{{1,2}})\\/(\\d{{1,2}})\\/(\\d{{4}})/i;
@@ -344,6 +351,9 @@ def add_cache_busting_to_html(report_dir: str, timestamp: int) -> None:
         timestamp: Timestamp to use for cache busting.
     """
     html_files = glob.glob(os.path.join(report_dir, "**", "*.html"), recursive=True)
+    
+    # Add version parameter to the script URL to prevent caching of the JS file itself,
+    # but don't add timestamp to the meta tags to prevent page redirect issues
     head_tag_with_meta = f'<head><meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate"><script src="assets/force-refresh.js?v={timestamp}"></script>'
     
     for html_file in html_files:
@@ -370,6 +380,54 @@ def create_nojekyll_file(report_dir: str) -> None:
         pass
     
     print("✅ Created .nojekyll file")
+
+
+def cleanup_previous_customizations(report_dir: str) -> None:
+    """Remove artifacts from previous customization attempts.
+    
+    This helps prevent conflicts between different customization approaches
+    that might interfere with each other.
+    
+    Args:
+        report_dir: Path to the Allure report directory.
+    """
+    # Files to check and delete if they exist
+    files_to_clean = [
+        os.path.join(report_dir, "js", "cache-buster.js"),
+        os.path.join(report_dir, "cache-buster.js")
+    ]
+    
+    for file_path in files_to_clean:
+        if os.path.exists(file_path):
+            try:
+                os.remove(file_path)
+                print(f"✅ Removed old customization file: {file_path}")
+            except Exception as e:
+                print(f"⚠️ Warning: Failed to remove file {file_path}: {e}")
+                
+    # Check all HTML files for problematic meta refresh tags that might cause redirects
+    html_files = glob.glob(os.path.join(report_dir, "**", "*.html"), recursive=True)
+    for html_file in html_files:
+        try:
+            with open(html_file, 'r', encoding='utf-8') as f:
+                content = f.read()
+            
+            # Remove any <meta http-equiv="refresh" ...> tags
+            if '<meta http-equiv="refresh"' in content:
+                new_content = re.sub(
+                    r'<meta\s+http-equiv=["\']refresh["\'][^>]*>', 
+                    '', 
+                    content
+                )
+                
+                if new_content != content:
+                    with open(html_file, 'w', encoding='utf-8') as f:
+                        f.write(new_content)
+                    print(f"✅ Removed problematic refresh meta tag from {os.path.basename(html_file)}")
+        except Exception as e:
+            print(f"⚠️ Warning: Failed to check/clean HTML file {html_file}: {e}")
+    
+    print("✅ Cleanup of previous customizations completed")
 
 
 def create_dummy_report(report_dir: str) -> None:
@@ -453,7 +511,11 @@ def main() -> int:
         create_dummy_report(report_dir)
         return 0
     
+    # Generate timestamp for this run
     timestamp = get_current_timestamp()
+    
+    # Clean up any previous customizations that might interfere
+    cleanup_previous_customizations(report_dir)
     
     # Apply customizations
     fix_date_formats_in_json(report_dir)
