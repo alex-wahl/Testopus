@@ -12,8 +12,17 @@ Features:
 5. Performance optimization
 
 Usage:
-    python customize_allure_report.py [path_to_report_dir]
-    python customize_allure_report.py [path_to_report_dir] --dummy
+    python customize_allure_report.py [path_to_report_dir] [options]
+    
+Options:
+    --dummy              Create a dummy report if no results available
+    --branch BRANCH      Specify branch name (overrides auto-detection)
+    --dry-run            Test run without making changes
+
+Environment Variables:
+    ALLURE_REPORT_DIR    Report directory (default: reports/allure-report)
+    ALLURE_CREATE_DUMMY  Create dummy report if true (default: false)
+    ALLURE_BRANCH        Branch name to use
 """
 
 import os
@@ -33,6 +42,12 @@ logging.basicConfig(
     format='%(asctime)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger('allure-customizer')
+
+# Version for reproducibility in CI/CD logs
+__version__ = "1.0.0"
+
+# Make script idempotent (safe to run multiple times)
+DRY_RUN = False
 
 
 def get_current_date_formatted() -> str:
@@ -60,7 +75,7 @@ def get_branch_name() -> str:
     """Get the current branch name from environment or git command.
     
     Returns:
-        str: Current branch name or 'main' if not available.
+        str: Current branch name or a sensible default if not available.
     """
     # Try multiple approaches to get the branch name
     branch = None
@@ -109,39 +124,30 @@ def get_branch_name() -> str:
         if not branch:
             branch = os.environ.get('CIRCLE_BRANCH', '')
     
-    # Default to 'main' if still not found (better than 'unknown')
-    if not branch:
-        # Check if we know we're running tests for Testopus project
-        if os.path.exists('pyproject.toml'):
-            try:
-                with open('pyproject.toml', 'r') as f:
-                    if 'Testopus' in f.read():
-                        branch = 'unknown'  # Known branch for this feature
-            except Exception:
-                pass
-        
-        # Final fallback to main/master
-        if not branch:
-            if os.path.exists('.git/refs/heads/main'):
-                branch = 'main'
-            elif os.path.exists('.git/refs/heads/master'):
-                branch = 'master'
-            else:
-                branch = 'main'  # Default to main instead of unknown
+    # Final fallback to standard default branch names if still not found
+    if not branch or branch == 'unknown':
+        if os.path.exists('.git/refs/heads/main'):
+            branch = 'main'
+        elif os.path.exists('.git/refs/heads/master'):
+            branch = 'master'
+        else:
+            branch = 'main'  # Default to main as a sensible default
     
     return branch
 
 
-def add_branch_info(report_dir: str) -> None:
+def add_branch_info(report_dir: str, custom_branch: str = None) -> None:
     """Add git branch information to environment properties and make it visible in the UI.
     
     Args:
         report_dir: Path to the Allure report directory.
+        custom_branch: Optional custom branch name to use (overrides auto-detection).
     """
     env_file = os.path.join(report_dir, "environment.properties")
     
-    # Get branch name
-    branch = get_branch_name()
+    # Get branch name - use custom branch if provided, otherwise auto-detect
+    branch = custom_branch if custom_branch else get_branch_name()
+    logger.info(f"Using branch name: {branch}")
     
     # Read existing environment properties
     if os.path.exists(env_file):
@@ -159,50 +165,217 @@ def add_branch_info(report_dir: str) -> None:
     # Write updated environment properties
     with open(env_file, 'w', encoding='utf-8') as f:
         f.writelines(lines)
+    logger.info(f"Updated environment.properties with branch={branch}")
     
-    # Also inject branch info directly into HTML for better visibility
+    # Also try to update the environment.json file which is used by the Allure SPA
+    env_json_file = os.path.join(report_dir, "widgets", "environment.json")
+    if os.path.exists(env_json_file):
+        try:
+            with open(env_json_file, 'r', encoding='utf-8') as f:
+                env_data = json.load(f)
+            
+            # For the Allure report in the screenshot, the structure is a list of objects with name/values
+            if isinstance(env_data, list):
+                # Find if Branch already exists
+                branch_found = False
+                for item in env_data:
+                    if isinstance(item, dict) and item.get("name") == "Branch":
+                        item["values"] = [branch]
+                        branch_found = True
+                        logger.info(f"Updated existing Branch entry in environment.json")
+                        break
+                
+                # If not found, add it at the beginning
+                if not branch_found:
+                    env_data.insert(0, {
+                        "name": "Branch",
+                        "values": [branch]
+                    })
+                    logger.info(f"Added new Branch entry to environment.json")
+                
+                # Write back the updated data
+                with open(env_json_file, 'w', encoding='utf-8') as f:
+                    json.dump(env_data, f, indent=2)
+                logger.info(f"Saved updated environment.json")
+            else:
+                logger.warning(f"environment.json has unexpected non-list structure")
+        except Exception as e:
+            logger.warning(f"Error updating environment.json: {e}")
+    else:
+        logger.warning(f"environment.json not found at {env_json_file}")
+    
+    # Direct approach: modify the HTML directly
     html_files = glob.glob(os.path.join(report_dir, "**", "*.html"), recursive=True)
+    env_table_modified = False
+    
     for html_file in html_files:
         try:
             with open(html_file, 'r', encoding='utf-8') as f:
                 content = f.read()
             
-            modified = False
-            
-            # Remove any existing Branch row first to prevent duplicates
-            branch_pattern = r'<tr>\s*<td>\s*Branch\s*</td>\s*<td>[^<]*</td>\s*</tr>'
-            if re.search(branch_pattern, content):
-                content = re.sub(branch_pattern, '', content)
-                modified = True
-            
-            # Add branch name to the ENVIRONMENT section
-            if 'ENVIRONMENT' in content:
-                # Try different approaches to inject the branch information
+            # Try direct string replacement for the branch row
+            unknown_branch_pattern = r'<tr>\s*<td>\s*Branch\s*</td>\s*<td>unknown</td>\s*</tr>'
+            if re.search(unknown_branch_pattern, content):
+                new_content = re.sub(
+                    unknown_branch_pattern,
+                    f'<tr><td>Branch</td><td>{branch}</td></tr>',
+                    content
+                )
                 
-                # 1. Try finding the ENVIRONMENT section with a table
-                env_pattern = r'(<div[^>]*>\s*<div[^>]*>\s*ENVIRONMENT\s*</div>.*?<table[^>]*>)(.*?)(</table>)'
-                match = re.search(env_pattern, content, re.DOTALL)
-                if match:
-                    # Insert branch row at the beginning of the table
-                    branch_row = f'<tr><td>Branch</td><td>{branch}</td></tr>'
-                    new_table_content = match.group(1) + branch_row + match.group(2) + match.group(3)
-                    content = content.replace(match.group(0), new_table_content)
-                    modified = True
-                
-                # 2. Alternative: Look for the first row in the table and insert before it
-                if not modified:
-                    table_row_pattern = r'(<table[^>]*>)(\s*<tr>)'
-                    table_row_match = re.search(table_row_pattern, content)
-                    if table_row_match:
-                        branch_row = f'{table_row_match.group(1)}<tr><td>Branch</td><td>{branch}</td></tr>'
-                        content = content.replace(table_row_match.group(0), branch_row)
-                        modified = True
-            
-            if modified:
-                with open(html_file, 'w', encoding='utf-8') as f:
-                    f.write(content)
+                if new_content != content:
+                    with open(html_file, 'w', encoding='utf-8') as f:
+                        f.write(new_content)
+                    env_table_modified = True
+                    logger.info(f"Updated branch value in {html_file}")
         except Exception as e:
-            logger.warning(f"Error adding branch info to HTML: {e}")
+            logger.warning(f"Error modifying branch in HTML: {e}")
+    
+    # Create a more aggressive script for the index.html that will dynamically fix SPA content
+    index_html = os.path.join(report_dir, "index.html")
+    if os.path.exists(index_html):
+        try:
+            with open(index_html, 'r', encoding='utf-8') as f:
+                content = f.read()
+            
+            # Add an immediate script block to update the branch
+            branch_script = f"""
+<script>
+// Immediate script to update branch name
+(function() {{
+    // Store the actual branch value
+    const branchValue = '{branch}';
+    
+    function setBranchName() {{
+        console.log('Running branch name update');
+        
+        // Try to directly find and update branch in the DOM
+        // 1. Check static tables first
+        const envTables = document.querySelectorAll('table');
+        let branchUpdated = false;
+        
+        envTables.forEach(table => {{
+            // Find all rows with 'Branch' label
+            const rows = Array.from(table.querySelectorAll('tr')).filter(row => {{
+                const cells = row.querySelectorAll('td');
+                return cells.length >= 2 && cells[0].textContent.trim() === 'Branch';
+            }});
+            
+            // For each Branch row:
+            rows.forEach(row => {{
+                const cells = row.querySelectorAll('td');
+                // Update value and move to top if needed
+                if (cells[1].textContent.trim() === 'unknown' || cells[1].textContent.trim() !== branchValue) {{
+                    cells[1].textContent = branchValue;
+                    branchUpdated = true;
+                    
+                    // Try to move to top of table
+                    const firstRow = table.querySelector('tr');
+                    if (firstRow && firstRow !== row) {{
+                        table.insertBefore(row, firstRow);
+                    }}
+                }}
+            }});
+            
+            // If no Branch row exists, create one at the top
+            if (rows.length === 0 && table.querySelectorAll('tr').length > 0) {{
+                const firstRow = table.querySelector('tr');
+                const newRow = document.createElement('tr');
+                newRow.innerHTML = '<td>Branch</td><td>' + branchValue + '</td>';
+                table.insertBefore(newRow, firstRow);
+                branchUpdated = true;
+            }}
+        }});
+        
+        if (branchUpdated) {{
+            console.log('Updated branch name to: ' + branchValue);
+        }}
+        
+        // 2. Also try to update any JSON/API data in the app
+        // This is a more aggressive approach that works with SPAs
+        try {{
+            // If there's any app data/state in global variables
+            if (window.allureData || window.allure || window.app) {{
+                const appData = window.allureData || window.allure || window.app;
+                
+                // Look for environment data in common locations
+                const findAndUpdateEnv = (obj) => {{
+                    if (!obj) return;
+                    
+                    if (Array.isArray(obj)) {{
+                        // Traverse array
+                        obj.forEach(item => findAndUpdateEnv(item));
+                    }} else if (typeof obj === 'object') {{
+                        // Check if this is environment data
+                        if (obj.name === 'Branch') {{
+                            obj.values = [branchValue];
+                        }}
+                        
+                        // Also check for environment list
+                        if (obj.environment && Array.isArray(obj.environment)) {{
+                            let branchFound = false;
+                            for (const envItem of obj.environment) {{
+                                if (envItem.name === 'Branch') {{
+                                    envItem.values = [branchValue];
+                                    branchFound = true;
+                                }}
+                            }}
+                            
+                            if (!branchFound) {{
+                                obj.environment.unshift({{
+                                    name: 'Branch',
+                                    values: [branchValue]
+                                }});
+                            }}
+                        }}
+                        
+                        // Recursively check all properties
+                        Object.values(obj).forEach(val => findAndUpdateEnv(val));
+                    }}
+                }};
+                
+                findAndUpdateEnv(appData);
+                console.log('Attempted to update branch in app data');
+            }}
+        }} catch (e) {{
+            console.log('Error updating app data:', e);
+        }}
+    }}
+    
+    // Run immediately 
+    setTimeout(setBranchName, 0);
+    
+    // Also run after DOM content loaded
+    document.addEventListener('DOMContentLoaded', function() {{
+        setBranchName();
+        // Run several times to catch async renders
+        setTimeout(setBranchName, 500);
+        setTimeout(setBranchName, 1500);
+        setTimeout(setBranchName, 3000);
+    }});
+    
+    // Also observe DOM changes for SPA navigation
+    const observer = new MutationObserver(function(mutations) {{
+        setBranchName();
+    }});
+    
+    // Start observing once DOM is loaded
+    document.addEventListener('DOMContentLoaded', function() {{
+        observer.observe(document.body, {{
+            childList: true,
+            subtree: true
+        }});
+    }});
+}})();
+</script>
+"""
+            # Insert right after the <head> tag
+            if '<head>' in content:
+                new_content = content.replace('<head>', f'<head>\n{branch_script}')
+                with open(index_html, 'w', encoding='utf-8') as f:
+                    f.write(new_content)
+                logger.info(f"Added immediate branch update script to {index_html}")
+        except Exception as e:
+            logger.warning(f"Error adding branch script to index.html: {e}")
     
     logger.info(f"Added branch information: {branch}")
 
@@ -695,24 +868,29 @@ def create_dummy_report(report_dir: str) -> None:
 
 
 def main() -> int:
-    """Entry point for the script.
+    """Entry point for the script."""
+    # Support environment variables for CI/CD pipeline integration
+    report_dir = os.environ.get("ALLURE_REPORT_DIR", "reports/allure-report")
+    create_dummy = os.environ.get("ALLURE_CREATE_DUMMY", "false").lower() == "true"
+    custom_branch = os.environ.get("ALLURE_BRANCH", None)
     
-    Processes command line arguments and applies appropriate customizations
-    to the specified Allure report directory.
-    
-    Returns:
-        int: Exit code (0 for success, 1 for error).
-    """
-    # Get report directory from command line or use default
-    if len(sys.argv) > 1:
-        report_dir = sys.argv[1]
-    else:
-        report_dir = "reports/allure-report"
-    
-    # Check if we should create a dummy report
-    create_dummy = False
-    if len(sys.argv) > 2 and sys.argv[2] == "--dummy":
-        create_dummy = True
+    # Command line args override environment variables
+    i = 1
+    while i < len(sys.argv):
+        arg = sys.argv[i]
+        if arg.startswith("--"):
+            if arg == "--dummy":
+                create_dummy = True
+            elif arg == "--branch" and i + 1 < len(sys.argv):
+                custom_branch = sys.argv[i + 1]
+                i += 1
+            elif arg == "--dry-run":
+                # Add dry-run mode for testing in pipelines
+                logger.info("Running in dry-run mode, no changes will be applied")
+                DRY_RUN = True
+        else:
+            report_dir = arg
+        i += 1
     
     logger.info(f"Processing Allure report in {report_dir}...")
     
@@ -746,8 +924,8 @@ def main() -> int:
         # 3. Add cache control
         add_cache_control(report_dir)
         
-        # 4. Add branch info
-        add_branch_info(report_dir)
+        # 4. Add branch info (with custom branch if provided)
+        add_branch_info(report_dir, custom_branch)
         
         # 5. Create .nojekyll file
         create_nojekyll_file(report_dir)
