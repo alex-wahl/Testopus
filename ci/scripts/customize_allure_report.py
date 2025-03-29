@@ -13,7 +13,7 @@ Features:
 
 Usage:
     python customize_allure_report.py [path_to_report_dir] [options]
-    
+
 Options:
     --dummy              Create a dummy report if no results available
     --branch BRANCH      Specify branch name (overrides auto-detection)
@@ -33,32 +33,39 @@ import logging
 import argparse
 
 from utils.constants import (
-    VERSION, ENV_REPORT_DIR, ENV_CREATE_DUMMY, 
-    DEFAULT_REPORT_DIR, DEFAULT_RESULTS_DIR, DEFAULT_HISTORY_DIR
+    VERSION,
+    ENV_REPORT_DIR,
+    ENV_CREATE_DUMMY,
+    DEFAULT_REPORT_DIR,
+    DEFAULT_RESULTS_DIR,
+    DEFAULT_HISTORY_DIR,
 )
 from modules.branch_info import add_branch_info, set_dry_run as branch_set_dry_run
 from modules.date_formatter import (
-    fix_html_title_tags, 
-    fix_js_date_formats, 
+    fix_html_title_tags,
+    fix_js_date_formats,
     fix_json_timestamps,
-    set_dry_run as date_set_dry_run
+    set_dry_run as date_set_dry_run,
 )
 from modules.cache_control import (
-    add_cache_control, 
+    add_cache_control,
     create_nojekyll_file,
-    set_dry_run as cache_set_dry_run
+    set_dry_run as cache_set_dry_run,
 )
 from modules.dummy_report import create_dummy_report
 from modules.history import preserve_history, set_dry_run as history_set_dry_run
-from modules.error_handling import fix_missing_test_results, set_dry_run as error_set_dry_run
+from modules.error_handling import (
+    fix_missing_test_results,
+    set_dry_run as error_set_dry_run,
+)
 
 # Set up logging
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s',
-    datefmt='%Y-%m-%d %H:%M:%S'
+    format="%(asctime)s - %(levelname)s - %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
 )
-logger = logging.getLogger('allure-customizer')
+logger = logging.getLogger("allure-customizer")
 
 # Version for reproducibility in CI/CD logs
 __version__ = VERSION
@@ -66,15 +73,16 @@ __version__ = VERSION
 # Make script idempotent (safe to run multiple times)
 DRY_RUN = False
 
+
 def set_all_dry_run_flags(dry_run: bool) -> None:
     """Set dry run mode for all modules.
-    
+
     Args:
         dry_run: Whether to perform operations in dry run mode
     """
     global DRY_RUN
     DRY_RUN = dry_run
-    
+
     # Set dry run flags in all modules
     branch_set_dry_run(dry_run)
     date_set_dry_run(dry_run)
@@ -82,86 +90,119 @@ def set_all_dry_run_flags(dry_run: bool) -> None:
     history_set_dry_run(dry_run)
     error_set_dry_run(dry_run)
 
+
 def parse_args():
     """Parse command line arguments.
-    
+
     Returns:
         argparse.Namespace: Parsed arguments.
     """
-    parser = argparse.ArgumentParser(description='Customize Allure reports for CI/CD')
-    parser.add_argument('report_dir', nargs='?', default=os.environ.get(ENV_REPORT_DIR, 'reports/allure-report'),
-                      help='Path to the Allure report directory (default: reports/allure-report)')
-    parser.add_argument('--dummy', action='store_true', default=os.environ.get(ENV_CREATE_DUMMY, 'false').lower() == 'true',
-                      help='Create a dummy report if no results available')
-    parser.add_argument('--branch', default=os.environ.get('ALLURE_BRANCH', None),
-                      help='Specify branch name (overrides auto-detection)')
-    parser.add_argument('--dry-run', action='store_true',
-                      help='Test run without making changes')
-    parser.add_argument('--history', action='store_true', default=os.environ.get('ALLURE_PRESERVE_HISTORY', 'true').lower() == 'true',
-                      help='Preserve test history between runs')
-    parser.add_argument('--version', action='version', version=f'%(prog)s {__version__}',
-                      help='Show version information and exit')
-    
+    parser = argparse.ArgumentParser(description="Customize Allure reports for CI/CD")
+    parser.add_argument(
+        "report_dir",
+        nargs="?",
+        default=os.environ.get(ENV_REPORT_DIR, "reports/allure-report"),
+        help="Path to the Allure report directory (default: reports/allure-report)",
+    )
+    parser.add_argument(
+        "--dummy",
+        action="store_true",
+        default=os.environ.get(ENV_CREATE_DUMMY, "false").lower() == "true",
+        help="Create a dummy report if no results available",
+    )
+    parser.add_argument(
+        "--branch",
+        default=os.environ.get("ALLURE_BRANCH", None),
+        help="Specify branch name (overrides auto-detection)",
+    )
+    parser.add_argument(
+        "--dry-run", action="store_true", help="Test run without making changes"
+    )
+    parser.add_argument(
+        "--history",
+        action="store_true",
+        default=os.environ.get("ALLURE_PRESERVE_HISTORY", "true").lower() == "true",
+        help="Preserve test history between runs",
+    )
+    parser.add_argument(
+        "--version",
+        action="version",
+        version=f"%(prog)s {__version__}",
+        help="Show version information and exit",
+    )
+
     return parser.parse_args()
 
 
 def main() -> int:
     """Main entry point for the script.
-    
+
     Processes command line arguments, sets up logging, and runs the appropriate
     customization functions based on the provided arguments.
-    
+
     Returns:
         int: Exit code (0 for success, non-zero for errors)
     """
     # Process command line arguments
     args = parse_args()
-    
+
     # Set global dry-run mode
     set_all_dry_run_flags(args.dry_run)
-    
+
     # Log script version and arguments
     logger.info(f"Allure Report Customizer v{__version__}")
     logger.info(f"Arguments: {args}")
-    
+
     # Determine report directory
-    report_dir = args.report_dir or os.environ.get(ENV_REPORT_DIR, 'reports/allure-report')
+    report_dir = args.report_dir or os.environ.get(
+        ENV_REPORT_DIR, "reports/allure-report"
+    )
     report_dir = os.path.abspath(report_dir)
     logger.info(f"Using report directory: {report_dir}")
-    
+
     # Ensure the report directory exists
     if not os.path.exists(report_dir):
-        if args.dummy or os.environ.get(ENV_CREATE_DUMMY, '').lower() in ('true', 'yes', '1'):
-            logger.info(f"Report directory does not exist, creating dummy report at {report_dir}")
+        if args.dummy or os.environ.get(ENV_CREATE_DUMMY, "").lower() in (
+            "true",
+            "yes",
+            "1",
+        ):
+            logger.info(
+                f"Report directory does not exist, creating dummy report at {report_dir}"
+            )
             create_dummy_report(report_dir)
         else:
             logger.error(f"Report directory does not exist: {report_dir}")
             return 1
-    
+
     # Create .nojekyll file for GitHub Pages
     create_nojekyll_file(report_dir)
-    
+
     # Add branch information
     add_branch_info(report_dir, args.branch)
-    
+
     # Fix date format
     fix_html_title_tags(report_dir)
     fix_js_date_formats(report_dir)
     fix_json_timestamps(report_dir)
-    
+
     # Add custom CSS
     add_cache_control(report_dir)
-    
+
     # Fix missing test results
     fix_missing_test_results(report_dir)
-    
+
     # If history flag is provided, also preserve history
-    if args.history or os.environ.get('ALLURE_PRESERVE_HISTORY', '').lower() in ('true', 'yes', '1'):
+    if args.history or os.environ.get("ALLURE_PRESERVE_HISTORY", "").lower() in (
+        "true",
+        "yes",
+        "1",
+    ):
         preserve_history(report_dir)
-    
+
     logger.info(f"Customization complete for {report_dir}")
     return 0
 
 
 if __name__ == "__main__":
-    sys.exit(main()) 
+    sys.exit(main())

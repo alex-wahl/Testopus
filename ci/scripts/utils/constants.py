@@ -69,9 +69,9 @@ JS_DATE_FORMATTER = "date_formatter.js"
 JS_INLINE_DATE_FORMATTER = "inline_date_formatter.js"
 
 # Regex patterns
-DATE_PATTERN_MM_DD_YYYY = r'(\d{1,2})/(\d{1,2})/(\d{4})'
-DATE_PATTERN_DD_MM_YYYY = r'(\d{1,2})-(\d{1,2})-(\d{4})'
-ISO_TIMESTAMP_PATTERN = r'(\d{4}).(\d{2}).(\d{2})T(\d{2}):(\d{2}):(\d{2})'
+DATE_PATTERN_MM_DD_YYYY = r"(\d{1,2})/(\d{1,2})/(\d{4})"
+DATE_PATTERN_DD_MM_YYYY = r"(\d{1,2})-(\d{1,2})-(\d{4})"
+ISO_TIMESTAMP_PATTERN = r"(\d{4}).(\d{2}).(\d{2})T(\d{2}):(\d{2}):(\d{2})"
 
 # Cache-Control headers
 CACHE_CONTROL_HEADERS = """/*
@@ -83,4 +83,4 @@ CACHE_CONTROL_HEADERS = """/*
 # Cache-Control meta tags
 CACHE_CONTROL_META = """<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
-<meta http-equiv="Expires" content="0">""" 
+<meta http-equiv="Expires" content="0">"""
