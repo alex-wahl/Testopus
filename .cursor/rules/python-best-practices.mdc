@@ -1,0 +1,31 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+---
+name: python-best-practices.mdc
+description: Best practices for Python programming
+globs: **/*.py
+---
+
+- Use clear, descriptive names for variables and functions, following the convention of lowercase with underscores
+- Maintain consistent indentation (4 spaces) and spacing throughout your code
+- Break down complex functions into smaller, focused units to adhere to the Single Responsibility Principle (SRP)
+- Keep functions concise, ideally under 20 lines, to enhance readability
+- Utilize list comprehensions and generator expressions for concise and efficient data processing
+- Implement proper error handling with try/except blocks, and use specific exception types when possible
+- Leverage context managers (with statements) for resource management and to ensure proper cleanup
+- Use type hints to improve code readability and catch potential type-related errors early
+- Follow PEP 8 style guide for consistent code formatting and style
+- Write comprehensive docstrings for modules, functions, and classes in google style notation to provide clear documentation
+- Utilize virtual environments to manage project dependencies and avoid version conflicts
+- Follow DRY, KISS, and SOLID principles where applicable
+- Consider time and space complexity, using appropriate data structures and optimizing only when necessary
+- Implement proper logging and write unit tests when applicable
+- Use version control with descriptive commit messages
+- Validate input requirements, consider security implications, and ensure maintainability
+- Check for potential edge cases and verify backward compatibility
+- Function names should be lowercase, with words separated by underscores as necessary to improve readability
+- Variable names follow the same convention as function names
+- mixedCase is allowed only in contexts where that's already the prevailing style (e.g. threading.py), to retain backwards compatibility

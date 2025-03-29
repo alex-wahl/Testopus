@@ -153,35 +153,131 @@ def fix_missing_test_results(report_dir: str) -> None:
         report_dir: Path to the Allure report directory.
     """
     if DRY_RUN:
-        logger.info("DRY-RUN: Would add 404 handling script to index.html")
+        logger.info("DRY-RUN: Would add error handling scripts")
         return
 
+    # Check if report directory exists
+    if not os.path.exists(report_dir):
+        logger.warning(f"Report directory not found at {report_dir}")
+        return
+
+    # Copy error handler JS file to the report directory
+    _copy_error_handler_js(report_dir)
+
+    # Create 404.html page for GitHub Pages
+    _create_404_page(report_dir)
+
+    # Add error handler script to index.html
+    _add_error_handler_to_index(report_dir)
+
+    logger.info("Added error handling scripts to Allure report")
+
+
+def _copy_error_handler_js(report_dir: str) -> None:
+    """Copy the error handler JavaScript to the report directory.
+
+    Args:
+        report_dir: The report directory path
+    """
+    # Get error handler JS content
+    error_handler_js = get_js_script_content("error_handler.js")
+
+    if not error_handler_js:
+        logger.warning("Error handler JavaScript file not found")
+        return
+
+    # Write to the report directory
+    js_path = os.path.join(report_dir, "error_handler.js")
+    with open(js_path, "w", encoding="utf-8") as f:
+        f.write(error_handler_js)
+
+    logger.info(f"Created error handler JS at {js_path}")
+
+
+def _create_404_page(report_dir: str) -> None:
+    """Create a 404.html page for GitHub Pages.
+
+    Args:
+        report_dir: The report directory path
+    """
+    # Get template path to 404 template
+    template_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "templates")
+    template_path = os.path.join(template_dir, "404.html")
+
+    # If template doesn't exist, create a fallback page
+    if not os.path.exists(template_path):
+        logger.warning(f"404 template not found at {template_path}, using fallback template")
+        _create_fallback_404_page(report_dir)
+        return
+
+    # Read the template and write to report directory
+    try:
+        with open(template_path, "r", encoding="utf-8") as f:
+            content = f.read()
+
+        error_page_path = os.path.join(report_dir, "404.html")
+        with open(error_page_path, "w", encoding="utf-8") as f:
+            f.write(content)
+
+        logger.info(f"Created 404 error page at {error_page_path}")
+    except Exception as e:
+        logger.error(f"Error creating 404 page: {str(e)}")
+        _create_fallback_404_page(report_dir)
+
+
+def _create_fallback_404_page(report_dir: str) -> None:
+    """Create a simple fallback 404.html page when template is missing.
+    
+    Args:
+        report_dir: The report directory path
+    """
+    # Get path to fallback template
+    template_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "templates")
+    fallback_template_path = os.path.join(template_dir, "fallback_404.html")
+    
+    try:
+        # Read the fallback template
+        with open(fallback_template_path, "r", encoding="utf-8") as f:
+            fallback_content = f.read()
+            
+        error_page_path = os.path.join(report_dir, "404.html")
+        with open(error_page_path, "w", encoding="utf-8") as f:
+            f.write(fallback_content)
+        
+        logger.info(f"Created fallback 404 error page at {error_page_path}")
+    except Exception as e:
+        logger.error(f"Critical error: Could not read fallback template: {str(e)}")
+        logger.error(f"Cannot create 404 page without a valid template at {fallback_template_path}")
+        raise RuntimeError(f"Failed to create 404 page: fallback template missing at {fallback_template_path}")
+
+
+def _add_error_handler_to_index(report_dir: str) -> None:
+    """Add error handler script to index.html.
+
+    Args:
+        report_dir: The report directory path
+    """
     index_file = os.path.join(report_dir, "index.html")
     if not os.path.exists(index_file):
-        logger.warning("index.html not found at {0}".format(index_file))
+        logger.warning(f"index.html not found at {index_file}")
         return
 
     try:
-        # Load 404 error handling JavaScript from external file
-        fix_404_script = get_js_script_content("fix_404_errors.js")
-
-        if not fix_404_script:
-            logger.warning("404 error handling JavaScript file not found, aborting")
-            return
-
         # Read the HTML file
         with open(index_file, "r", encoding="utf-8") as f:
             content = f.read()
 
-        # Add the script to the head section
-        if "</head>" in content:
-            script_tag = '<script type="text/javascript" id="error-handler">\n{0}\n</script>'.format(fix_404_script)
+        # Add the script to the head section if not already present
+        if 'src="error_handler.js"' not in content and "</head>" in content:
+            script_tag = '<script src="error_handler.js"></script>'
             content = content.replace("</head>", script_tag + "</head>")
 
             with open(index_file, "w", encoding="utf-8") as f:
                 f.write(content)
-            logger.info("Added 404 handling script to index.html")
+            logger.info("Added error handler script to index.html")
+        elif 'src="error_handler.js"' in content:
+            logger.info("Error handler script already present in index.html")
         else:
             logger.warning("Could not find </head> in index.html")
     except Exception as e:
-        logger.error("Failed to add 404 handling script: {0}".format(str(e)))
+        logger.error(f"Failed to add error handler script to index.html: {str(e)}")

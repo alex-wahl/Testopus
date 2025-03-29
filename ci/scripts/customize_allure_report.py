@@ -266,12 +266,31 @@ def main():
     # Add cache busting to script URLs
     add_cache_busting_to_scripts(report_dir)
 
+    # Create custom error pages
+    create_error_pages(report_dir)
+
     # Preserve history between runs
     preserve_history_flag = args.history or os.environ.get(ENV_PRESERVE_HISTORY) == "true"
     handle_history(report_dir, preserve_history_flag, args.dry_run)
 
     logger.info("Done!")
     return 0
+
+
+def create_error_pages(report_dir: str) -> None:
+    """Create custom error pages for GitHub Pages.
+
+    This function is now a simple wrapper to the enhanced error handling
+    functionality in the error_handling module.
+
+    Args:
+        report_dir: Path to the report directory
+    """
+    # The actual implementation is now in the error_handling module
+    from ci.scripts.modules.error_handling import fix_missing_test_results
+
+    # This will create the 404.html and add the error handler script
+    fix_missing_test_results(report_dir)
 
 
 if __name__ == "__main__":

@@ -1,22 +1,44 @@
 // Fix for 404 errors when test results are missing
 document.addEventListener('DOMContentLoaded', function() {
-    // Handle 401 errors for GitHub Pages
-    if (document.title.includes('401') ||
-        document.body.innerText.includes('401') ||
-        (document.body.innerText.includes('Not found') && document.body.innerText.includes('401'))) {
-        console.warn('Detected 401 error, redirecting to base path');
+    // Enhanced error detection (401, 404, Not found)
+    function isErrorPage() {
+        var errorIndicators = [
+            document.title.includes('401'),
+            document.title.includes('404'),
+            document.body.innerText.includes('401'),
+            document.body.innerText.includes('404'),
+            document.body.innerText.includes('Not found'),
+            // Check for GitHub Pages specific error messages
+            document.body.innerText.includes('File not found'),
+            document.body.innerText.includes('Page not found'),
+            // Specific page content checks
+            document.querySelector('h1')?.innerText === '401' || document.querySelector('h1')?.innerText === '404'
+        ];
 
-        // Redirect to the base path of the site
-        const currentPath = window.location.pathname;
-        const segments = currentPath.split('/').filter(Boolean);
+        return errorIndicators.some(function(indicator) { return indicator; });
+    }
 
-        // If we're on a subpath, redirect to the repository root
-        if (segments.length > 1) {
-            const newPath = '/' + segments[0];
-            console.log('Redirecting from', currentPath, 'to', newPath);
-            window.location.href = window.location.origin + newPath;
-            return;
+    // Redirect to base if we're on an error page
+    if (isErrorPage()) {
+        console.warn('Detected error page, redirecting');
+
+        // Get current URL parts
+        var origin = window.location.origin;
+        var pathname = window.location.pathname;
+        var repoName = pathname.split('/')[1]; // Get the repository name
+
+        // Try different redirection strategies
+        if (repoName) {
+            // Strategy 1: Try repository root
+            var repoRoot = origin + '/' + repoName;
+            console.log('Redirecting to repository root:', repoRoot);
+            window.location.href = repoRoot;
+        } else {
+            // Strategy 2: Fall back to site root
+            console.log('Redirecting to site root');
+            window.location.href = origin;
         }
+        return;
     }
 
     // Intercept AJAX requests to detect 404 errors for test results
