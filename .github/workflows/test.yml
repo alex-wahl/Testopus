@@ -41,9 +41,13 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  # Test job
-  test:
+  # Setup job
+  setup:
     runs-on: ubuntu-latest
+    outputs:
+      test_suite: ${{ github.event.inputs.test_suite || 'all' }}
+      debug_mode: ${{ github.event.inputs.debug_mode || 'false' }}
+      custom_flags: ${{ github.event.inputs.custom_flags }}
     
     steps:
       - uses: actions/checkout@v4
@@ -59,27 +63,15 @@ jobs:
       - name: Install CI dependencies
         run: pip install -r ci/requirements.txt
       
-      # Make sure reports directories exist
+      # Prepare directories
       - name: Prepare directories
         run: |
-          mkdir -p reports/allure-results
-          mkdir -p reports/html
-          mkdir -p reports/junit
-          mkdir -p reports/screenshots
-          mkdir -p reports/allure-report
+          mkdir -p reports/{allure-results,html,junit,screenshots,allure-report,allure-history}
           chmod -R 777 reports
-          echo "Listing test directories:"
-          find tests -type f -name "test_*.py" | sort
-      
-      # Setup Docker Buildx for improved caching
+
+      # Setup Docker Buildx
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
-      
-      # Prepare cache directories
-      - name: Prepare cache directories
-        run: |
-          mkdir -p /tmp/.buildx-cache
-          mkdir -p /tmp/.buildx-cache-new
       
       # Cache Docker layers
       - name: Cache Docker layers
@@ -90,7 +82,7 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-buildx-
       
-      # Build Docker image directly without registry login
+      # Build Docker image
       - name: Build Docker image
         uses: docker/build-push-action@v5
         with:
@@ -102,43 +94,76 @@ jobs:
           cache-from: type=local,src=/tmp/.buildx-cache
           cache-to: type=local,dest=/tmp/.buildx-cache-new,mode=max
       
-      # Temp fix for actions/cache performance
-      # https://github.com/docker/build-push-action/issues/252
+      # Move cache for performance
       - name: Move cache
         run: |
           rm -rf /tmp/.buildx-cache
           mv /tmp/.buildx-cache-new /tmp/.buildx-cache
       
+      - name: List test directories
+        run: find tests -type f -name "test_*.py" | sort
+  
+  # Run tests
+  test:
+    needs: setup
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      # Run tests based on test suite
       - name: Run tests
-        run: |
-          if [ "${{ github.event.inputs.test_suite }}" = "ui" ]; then
-            docker compose -f docker/docker-compose.yml run --rm testopus --verbose -vv --alluredir=/app/reports/allure-results --html=/app/reports/html/report.html --junitxml=/app/reports/junit/report_ui.xml /app/tests/ui_tests/web ${{ github.event.inputs.custom_flags }}
-          elif [ "${{ github.event.inputs.test_suite }}" = "api" ]; then
-            docker compose -f docker/docker-compose.yml run --rm testopus --verbose -vv --alluredir=/app/reports/allure-results --html=/app/reports/html/report.html --junitxml=/app/reports/junit/report_api.xml /app/tests/api_tests ${{ github.event.inputs.custom_flags }}
-          elif [ "${{ github.event.inputs.test_suite }}" = "internal" ]; then
-            docker compose -f docker/docker-compose.yml run --rm testopus --verbose -vv --alluredir=/app/reports/allure-results --html=/app/reports/html/report.html --junitxml=/app/reports/junit/report_internal.xml /app/tests/internal_tests ${{ github.event.inputs.custom_flags }}
-          else
-            docker compose -f docker/docker-compose.yml run --rm testopus --verbose -vv --alluredir=/app/reports/allure-results --html=/app/reports/html/report.html --junitxml=/app/reports/junit/report_all.xml /app/tests ${{ github.event.inputs.custom_flags }}
-          fi
         env:
-          DEBUG_MODE: ${{ github.event.inputs.debug_mode == 'true' }}
+          DEBUG_MODE: ${{ needs.setup.outputs.debug_mode == 'true' }}
           PYTHONPATH: /app
           DOCKER_ENV: true
           PYTEST_ADDOPTS: --verbose
           TZ: Europe/Berlin
+        run: |
+          case "${{ needs.setup.outputs.test_suite }}" in
+            "ui")
+              docker compose -f docker/docker-compose.yml run --rm testopus \
+                --verbose -vv \
+                --alluredir=/app/reports/allure-results \
+                --html=/app/reports/html/report.html \
+                --junitxml=/app/reports/junit/report_ui.xml \
+                /app/tests/ui_tests/web ${{ needs.setup.outputs.custom_flags }}
+              ;;
+            "api")
+              docker compose -f docker/docker-compose.yml run --rm testopus \
+                --verbose -vv \
+                --alluredir=/app/reports/allure-results \
+                --html=/app/reports/html/report.html \
+                --junitxml=/app/reports/junit/report_api.xml \
+                /app/tests/api_tests ${{ needs.setup.outputs.custom_flags }}
+              ;;
+            "internal")
+              docker compose -f docker/docker-compose.yml run --rm testopus \
+                --verbose -vv \
+                --alluredir=/app/reports/allure-results \
+                --html=/app/reports/html/report.html \
+                --junitxml=/app/reports/junit/report_internal.xml \
+                /app/tests/internal_tests ${{ needs.setup.outputs.custom_flags }}
+              ;;
+            *)
+              docker compose -f docker/docker-compose.yml run --rm testopus \
+                --verbose -vv \
+                --alluredir=/app/reports/allure-results \
+                --html=/app/reports/html/report.html \
+                --junitxml=/app/reports/junit/report_all.xml \
+                /app/tests ${{ needs.setup.outputs.custom_flags }}
+              ;;
+          esac
       
+      # Clean up containers
       - name: Clean up containers
         if: always()
         run: docker compose -f docker/docker-compose.yml down --remove-orphans
       
-      # List report files to verify they exist
-      - name: List reports directory
+      # Verify test artifacts
+      - name: Verify test artifacts
         if: always()
         run: |
-          echo "=== Workspace contents ==="
-          ls -la
-          echo "=== Reports directory ==="
-          ls -la reports/ || echo "No reports directory"
           echo "=== Allure results ==="
           ls -la reports/allure-results/ || echo "No allure-results directory"
           echo "=== HTML report ==="
@@ -148,12 +173,48 @@ jobs:
           echo "=== Screenshots ==="
           ls -la reports/screenshots/ || echo "No screenshots directory"
       
-      # Create empty history directory if it doesn't exist
-      - name: Create empty history if needed
+      # Create artifacts directory if it doesn't exist
+      - name: Create artifacts directory
         if: always()
+        run: mkdir -p reports/{allure-results,html,junit,screenshots,allure-report,allure-history}
+      
+      # Upload test results as artifacts
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: reports/
+          retention-days: 1  # Short retention as these will be processed by report job
+  
+  # Generate reports
+  report:
+    needs: [setup, test]
+    runs-on: ubuntu-latest
+    if: always()
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      
+      - name: Install CI dependencies
+        run: pip install -r ci/requirements.txt
+      
+      # Download test results
+      - name: Download test results
+        uses: actions/download-artifact@v4
+        with:
+          name: test-results
+          path: reports/
+      
+      # Create empty history if needed
+      - name: Create empty history if needed
         run: |
           mkdir -p reports/allure-history/history
-          # Create empty placeholder history files if they don't exist
           if [ ! -d "reports/allure-history" ] || [ -z "$(ls -A reports/allure-history)" ]; then
             echo "Creating empty history placeholder files"
             echo "{}" > reports/allure-history/history.json
@@ -165,80 +226,57 @@ jobs:
       
       # Download previous test history
       - name: Download previous test history
-        if: always()
         uses: actions/download-artifact@v4
-        continue-on-error: true  # Continue if no history exists yet - this will show "Unable to download artifact" on first run which is normal
+        continue-on-error: true
         with:
           name: allure-history
           path: reports/allure-history
       
-      # Install allure-commandline for report generation
+      # Install allure-commandline
       - name: Set up Allure
-        if: always()
         run: |
           wget -O allure-commandline.zip https://repo.maven.apache.org/maven2/io/qameta/allure/allure-commandline/2.24.0/allure-commandline-2.24.0.zip
           unzip allure-commandline.zip
       
       # Generate Allure report
       - name: Generate Allure Report
-        if: always()
         run: |
-          if [ -d "reports/allure-results" ] && [ "$(ls -A reports/allure-results)" ]; then
-            # Set timezone to Berlin
-            export TZ=Europe/Berlin
-            
-            # Create history directory in results if history exists
-            if [ -d "reports/allure-history" ] && [ "$(ls -A reports/allure-history)" ]; then
-              echo "Copying previous history to results"
-              mkdir -p reports/allure-results/history
-              cp -r reports/allure-history/* reports/allure-results/history/ || true
-            else
-              echo "No previous history found"
-            fi
-            
-            # Generate the report
-            ./allure-2.24.0/bin/allure generate reports/allure-results -o reports/allure-report --clean
-            
-            # Check if report generation was successful
-            if [ $? -ne 0 ]; then
-              echo "::warning::Allure report generation failed, creating dummy report"
-              python3 ci/scripts/customize_allure_report.py --dummy
-            else
-              # Customize the report using our Python script
-              # Ensure history is preserved between runs
-              python3 ci/scripts/customize_allure_report.py --history
-              
-              # Ensure history directory exists for next run
-              mkdir -p reports/allure-history
-              if [ -d "reports/allure-report/history" ]; then
-                echo "Saving history for future runs"
-                cp -r reports/allure-report/history/* reports/allure-history/ || true
-              fi
-            fi
-          else
-            echo "No Allure results found, creating a dummy report"
-            python3 ci/scripts/customize_allure_report.py --dummy
+          # Copy history to results directory
+          if [ -d "reports/allure-history" ] && [ "$(ls -A reports/allure-history)" ]; then
+            echo "Copying previous history to results"
+            mkdir -p reports/allure-results/history
+            cp -r reports/allure-history/* reports/allure-results/history/ || true
+          fi
+          
+          # Generate the report
+          ./allure-2.24.0/bin/allure generate reports/allure-results -o reports/allure-report --clean
+          
+          # Customize the report
+          python3 ci/scripts/customize_allure_report.py --history
+          
+          # Save history for future runs
+          mkdir -p reports/allure-history
+          if [ -d "reports/allure-report/history" ]; then
+            echo "Saving history for future runs"
+            cp -r reports/allure-report/history/* reports/allure-history/ || true
           fi
         env:
           ALLURE_REPORT_DIR: reports/allure-report
-          ALLURE_CREATE_DUMMY: false
           ALLURE_BRANCH: ${{ github.head_ref || github.ref_name }}
           ALLURE_PRESERVE_HISTORY: true
           GITHUB_REF: ${{ github.ref }}
           GITHUB_HEAD_REF: ${{ github.head_ref }}
       
-      # Upload test history as a separate artifact to preserve between runs
+      # Upload test history
       - name: Upload test history
-        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: allure-history
           path: reports/allure-history/
-          retention-days: 90  # Keep longer for better historical data
+          retention-days: 90
       
-      # Upload test reports as artifacts
+      # Upload test reports
       - name: Upload test reports
-        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: test-reports
@@ -248,27 +286,40 @@ jobs:
             reports/screenshots/
             reports/allure-results/
             reports/allure-report/
-          retention-days: 90  # Increase retention period
+          retention-days: 90
           
-      # Optional: Publish test results
+      # Publish test results
       - name: Publish Test Results
-        if: always()
         uses: EnricoMi/publish-unit-test-result-action@v2
         with:
           files: reports/junit/report*.xml
           check_name: Test Results
-          
-      # Upload artifact for deployment job
+  
+  # Deploy to GitHub Pages
+  deploy:
+    needs: report
+    runs-on: ubuntu-latest
+    if: always()
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      # Download report
+      - name: Download report
+        uses: actions/download-artifact@v4
+        with:
+          name: test-reports
+          path: reports/
+      
+      # Upload GitHub Pages artifact
       - name: Upload GitHub Pages artifact
-        if: always()
         uses: actions/upload-pages-artifact@v3
         with:
           path: reports/allure-report
-          retention-days: 90  # Increase retention period to match history
+          retention-days: 90
       
-      # For direct branch upload - GitHub Pages is configured to use the 'reporting' branch
+      # Deploy to reporting branch
       - name: Deploy to reporting branch
-        if: always()
         uses: peaceiris/actions-gh-pages@v3
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
@@ -281,10 +332,10 @@ jobs:
           user_name: "github-actions[bot]"
           user_email: "github-actions[bot]@users.noreply.github.com"
           commit_message: "docs: update Allure report [skip ci]"
-
-      # Comment on PR with Report Links
+      
+      # Comment on PR with report links
       - name: Comment PR with Report Links
-        if: always() && github.event_name == 'pull_request'
+        if: github.event_name == 'pull_request'
         uses: actions/github-script@v7
         with:
           script: |
