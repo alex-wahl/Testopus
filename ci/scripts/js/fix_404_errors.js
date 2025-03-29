@@ -38,6 +38,46 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     };
 
-    // Add click handler to test-result links
+    // Handle tab navigation errors (including 'undefined' tab)
+    var handleTabNavigation = function(e) {
+        // Check if this is a tab link
+        var href = e.target.getAttribute('href');
+        if (href && href.indexOf('#') === 0) {
+            // Special handling for 'undefined' tab
+            if (href === '#undefined' || href === '#null' || href === '#NaN') {
+                e.preventDefault();
+                console.warn('Invalid tab requested:', href);
+
+                // Find and click first available tab instead
+                var firstTab = document.querySelector('.allure-tabs a');
+                if (firstTab) {
+                    firstTab.click();
+                } else {
+                    // If no tabs found, attempt to navigate to overview tab
+                    var overviewTab = document.querySelector('[href="#overview"]');
+                    if (overviewTab) {
+                        overviewTab.click();
+                    }
+                }
+                return;
+            }
+
+            // Regular tab that doesn't exist
+            var targetTab = document.querySelector(href);
+            if (!targetTab) {
+                e.preventDefault();
+                console.warn('Tab not found:', href);
+
+                // Find and click first available tab instead
+                var firstTab = document.querySelector('.allure-tabs a');
+                if (firstTab) {
+                    firstTab.click();
+                }
+            }
+        }
+    };
+
+    // Add click handlers
     document.addEventListener('click', handleMissingTest, true);
+    document.addEventListener('click', handleTabNavigation, true);
 });

@@ -10,6 +10,7 @@ import logging
 import os
 import shutil
 import sys
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 
@@ -108,6 +109,168 @@ def initialize_history_files(directory: str) -> None:
                     # trend files need to be empty arrays
                     f.write("[]")
             logger.info(f"Created empty history file: {file_name}")
+
+
+def generate_basic_history_data(report_dir: str, history_dir: str) -> bool:
+    """Generate basic history data from current test results if no history exists.
+
+    This ensures that even for the first run, the history tab shows some minimal data.
+
+    Args:
+        report_dir: Path to the Allure report directory
+        history_dir: Path to the history directory
+
+    Returns:
+        bool: True if history was generated, False otherwise
+    """
+    logger.info("Generating basic history data from current run")
+
+    # Ensure history directory exists
+    ensure_dir_exists(history_dir)
+
+    # Check if we already have history data
+    history_json_path = os.path.join(history_dir, "history.json")
+    if os.path.exists(history_json_path) and os.path.getsize(history_json_path) > 5:
+        # We already have history data
+        logger.info("Existing history data found, skipping basic generation")
+        return False
+
+    # Find all test result JSON files to generate history from
+    test_results = {}
+    results_dir = os.path.join(os.path.dirname(report_dir), "allure-results")
+
+    # If no results directory, we can't generate history
+    if not os.path.exists(results_dir):
+        logger.warning(f"No results directory found at {results_dir}")
+        return False
+
+    # Look for test-result.json files
+    for root, _, files in os.walk(results_dir):
+        for file in files:
+            if file.endswith("-result.json") or file.endswith("-container.json"):
+                file_path = os.path.join(root, file)
+                try:
+                    with open(file_path, "r") as f:
+                        data = json.load(f)
+
+                    # Get test UUID and status
+                    if "uuid" in data and "status" in data:
+                        uuid = data["uuid"]
+                        status = data["status"]
+                        name = data.get("name", "Unknown Test")
+
+                        # Add to our test results dict
+                        test_results[uuid] = {
+                            "name": name,
+                            "status": status,
+                            "time": data.get("time", {"start": 0, "stop": 0, "duration": 0}),
+                        }
+                except Exception as e:
+                    logger.warning(f"Error processing test result file {file_path}: {str(e)}")
+
+    if not test_results:
+        logger.warning("No test results found to generate history from")
+        return False
+
+    # Generate history.json
+    history_data = {}
+    # Get current timestamp - can be used for history entries
+    timestamp = int(datetime.now().timestamp() * 1000)
+
+    for uuid, test_info in test_results.items():
+        # Create basic history entry for each test
+        history_data[uuid] = {
+            "statistic": {
+                "failed": 1 if test_info["status"] == "failed" else 0,
+                "broken": 1 if test_info["status"] == "broken" else 0,
+                "skipped": 1 if test_info["status"] == "skipped" else 0,
+                "passed": 1 if test_info["status"] == "passed" else 0,
+                "unknown": 1 if test_info["status"] == "unknown" else 0,
+                "total": 1,
+            },
+            "items": [
+                {
+                    "uid": uuid,
+                    "status": test_info["status"],
+                    "time": test_info["time"],
+                    "reportUrl": f"data/test-cases/{uuid}.json",
+                    "timestamp": timestamp,  # Add timestamp to history entry
+                }
+            ],
+        }
+
+    # Generate trend files
+    total_stats = {"failed": 0, "broken": 0, "skipped": 0, "passed": 0, "unknown": 0, "total": len(test_results)}
+
+    # Count statuses
+    for test_info in test_results.values():
+        status = test_info["status"]
+        if status == "failed":
+            total_stats["failed"] += 1
+        elif status == "broken":
+            total_stats["broken"] += 1
+        elif status == "skipped":
+            total_stats["skipped"] += 1
+        elif status == "passed":
+            total_stats["passed"] += 1
+        else:
+            total_stats["unknown"] += 1
+
+    # History trend
+    history_trend = [{"buildOrder": 1, "reportUrl": "index.html", "reportName": f"Run #{1}", "data": total_stats}]
+
+    # Categories trend
+    categories_trend = [
+        {
+            "buildOrder": 1,
+            "reportUrl": "index.html",
+            "reportName": f"Run #{1}",
+            "data": {"categoryA": total_stats["broken"], "categoryB": total_stats["failed"]},
+        }
+    ]
+
+    # Duration trend
+    duration_trend = [
+        {
+            "buildOrder": 1,
+            "reportUrl": "index.html",
+            "reportName": f"Run #{1}",
+            "data": {"duration": 0},  # We don't have aggregate duration info
+        }
+    ]
+
+    # Retries trend
+    retries_trend = [
+        {
+            "buildOrder": 1,
+            "reportUrl": "index.html",
+            "reportName": f"Run #{1}",
+            "data": {"retry": 0},  # We don't have retry info
+        }
+    ]
+
+    # Write files
+    try:
+        with open(os.path.join(history_dir, "history.json"), "w") as f:
+            json.dump(history_data, f)
+
+        with open(os.path.join(history_dir, "history-trend.json"), "w") as f:
+            json.dump(history_trend, f)
+
+        with open(os.path.join(history_dir, "categories-trend.json"), "w") as f:
+            json.dump(categories_trend, f)
+
+        with open(os.path.join(history_dir, "duration-trend.json"), "w") as f:
+            json.dump(duration_trend, f)
+
+        with open(os.path.join(history_dir, "retries-trend.json"), "w") as f:
+            json.dump(retries_trend, f)
+
+        logger.info(f"Generated basic history data with {len(test_results)} tests")
+        return True
+    except Exception as e:
+        logger.error(f"Error writing history files: {str(e)}")
+        return False
 
 
 def load_json_from_file(file_path: str, default_empty: Optional[Union[Dict, List]] = None) -> Union[Dict, List]:
@@ -329,10 +492,19 @@ def preserve_history(report_dir: str) -> None:
     # Create directories if they don't exist
     ensure_dir_exists(history_storage)
     ensure_dir_exists(storage_history_dir)
+    ensure_dir_exists(history_dir)
 
     # Initialize history storage if empty
     if not os.path.exists(storage_history_dir) or not os.listdir(storage_history_dir):
         initialize_history_files(storage_history_dir)
+
+    # If we don't have history data in the report, generate it
+    history_empty = not os.path.exists(history_dir) or not os.listdir(history_dir)
+    storage_empty = not os.path.exists(storage_history_dir) or not os.listdir(storage_history_dir)
+
+    if history_empty and storage_empty:
+        logger.info("No history data found, generating basic history from current run")
+        generate_basic_history_data(report_dir, history_dir)
 
     # Merge history from report to storage
     if os.path.exists(history_dir) and os.listdir(history_dir):

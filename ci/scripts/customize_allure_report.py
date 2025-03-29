@@ -37,6 +37,7 @@ from ci.scripts.modules.branch_info import add_branch_info  # noqa: E402
 from ci.scripts.modules.cache_control import add_cache_control  # noqa: E402
 from ci.scripts.modules.date_formatter import fix_date_formats  # noqa: E402
 from ci.scripts.modules.dummy_report import create_dummy_report  # noqa: E402
+from ci.scripts.modules.error_handling import add_cache_busting_to_scripts, fix_missing_test_results  # noqa: E402
 from ci.scripts.modules.history import preserve_history  # noqa: E402
 from ci.scripts.utils.constants import (  # noqa: E402
     DEFAULT_REPORT_DIR,
@@ -258,6 +259,12 @@ def main():
 
     # Fix date formats
     fix_dates(report_dir, args.dry_run)
+
+    # Add handling for missing test results
+    fix_missing_test_results(report_dir)
+
+    # Add cache busting to script URLs
+    add_cache_busting_to_scripts(report_dir)
 
     # Preserve history between runs
     preserve_history_flag = args.history or os.environ.get(ENV_PRESERVE_HISTORY) == "true"
