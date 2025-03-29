@@ -148,11 +148,26 @@ jobs:
           echo "=== Screenshots ==="
           ls -la reports/screenshots/ || echo "No screenshots directory"
       
+      # Create empty history directory if it doesn't exist
+      - name: Create empty history if needed
+        if: always()
+        run: |
+          mkdir -p reports/allure-history/history
+          # Create empty placeholder history files if they don't exist
+          if [ ! -d "reports/allure-history" ] || [ -z "$(ls -A reports/allure-history)" ]; then
+            echo "Creating empty history placeholder files"
+            echo "{}" > reports/allure-history/history.json
+            echo "{}" > reports/allure-history/categories-trend.json
+            echo "{}" > reports/allure-history/duration-trend.json
+            echo "{}" > reports/allure-history/retries-trend.json
+            echo "{}" > reports/allure-history/history-trend.json
+          fi
+      
       # Download previous test history
       - name: Download previous test history
         if: always()
         uses: actions/download-artifact@v4
-        continue-on-error: true  # Continue if no history exists yet
+        continue-on-error: true  # Continue if no history exists yet - this will show "Unable to download artifact" on first run which is normal
         with:
           name: allure-history
           path: reports/allure-history
