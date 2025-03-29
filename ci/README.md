@@ -53,6 +53,132 @@ The main CI/CD workflow is defined in `.github/workflows/test.yml` and follows t
    - Adds PR comments with report links
    - Publishes test results to PR checks
 
+## Local Code Quality Tools
+
+The repository includes several tools to ensure code quality during local development, before code is pushed to the remote repository. For detailed information, see [Local Checks Documentation](docs/local-checks.md).
+
+### Pre-commit Hooks
+
+Pre-commit hooks run automatically before each commit to catch issues early in the development process.
+
+#### Configuration
+
+The hooks are configured in `.pre-commit-config.yaml` and include:
+
+```yaml
+repos:
+-   repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.5.0
+    hooks:
+    -   id: trailing-whitespace
+    -   id: end-of-file-fixer
+    -   id: check-yaml
+    -   id: check-added-large-files
+
+-   repo: https://github.com/psf/black
+    rev: 25.1.0
+    hooks:
+    -   id: black
+        files: ^ci/scripts/
+
+-   repo: https://github.com/pycqa/isort
+    rev: 5.13.2
+    hooks:
+    -   id: isort
+        args: ["--profile", "black"]
+        files: ^ci/scripts/
+
+-   repo: https://github.com/pycqa/flake8
+    rev: 7.0.0
+    hooks:
+    -   id: flake8
+        files: ^ci/scripts/
+        args: ["--select=E9,F63,F7,F82", "--show-source", "--statistics", "--ignore=E402"]
+        additional_dependencies: [flake8-docstrings]
+
+-   repo: https://github.com/pycqa/pylint
+    rev: v3.1.0
+    hooks:
+    -   id: pylint
+        files: ^ci/scripts/
+        args: ["--disable=all", "--enable=unused-import,unused-variable,unused-argument,undefined-variable"]
+
+-   repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.9.0
+    hooks:
+    -   id: mypy
+        files: ^ci/scripts/
+        args: ["--ignore-missing-imports", "--namespace-packages", "--explicit-package-bases", "--config-file=mypy.ini"]
+```
+
+#### Installation and Usage
+
+To set up pre-commit hooks:
+
+```bash
+# Install pre-commit hooks to run before each commit
+pre-commit install
+
+# Install pre-push hooks to run before each push
+pre-commit install --hook-type pre-push
+
+# Run hooks manually on all files
+pre-commit run --all-files
+
+# Run a specific hook
+pre-commit run black
+```
+
+### Local CI Check Script
+
+The `local_ci_check.sh` script provides a comprehensive check of code before pushing to the remote repository.
+
+#### Script Workflow
+
+1. **Tool Verification**: Checks if all required tools are installed:
+   - black
+   - isort
+   - flake8
+   - pylint
+   - mypy
+
+2. **Pre-commit Hook Installation**: Ensures pre-commit hooks are installed
+
+3. **Code Quality Checks**:
+   - Import sorting with isort
+   - Code formatting with black
+   - Linting with flake8
+   - Static analysis with pylint
+   - Type checking with mypy
+
+4. **Test Execution**:
+   - Runs unit tests
+   - Generates test coverage reports
+   - Outputs test coverage metrics
+
+#### Usage
+
+```bash
+# Run all local CI checks
+./local_ci_check.sh
+```
+
+### Integration with GitHub Actions
+
+The same checks run in the local CI script are also configured in GitHub Actions workflows, ensuring consistent code quality standards between local development and CI/CD environments. Key differences include:
+
+1. **Scope**: Local CI checks focus on the code you're currently working on, while GitHub Actions runs on the entire codebase
+2. **Timing**: Local CI checks run before pushing, GitHub Actions runs after pushing
+3. **Environment**: Local CI runs in your development environment, GitHub Actions runs in a fresh, isolated container
+
+### Benefits of Local Quality Checks
+
+- **Catch Issues Early**: Problems are identified before they enter the codebase
+- **Consistent Style**: Ensures all code follows the same formatting and style guidelines
+- **Reduce CI Failures**: Fixes issues before they cause CI pipeline failures
+- **Improve Code Quality**: Static analysis catches potential bugs and anti-patterns
+- **Save Time**: Immediate feedback rather than waiting for CI/CD pipeline results
+
 ## Scripts
 
 ### customize_allure_report.py
@@ -98,6 +224,7 @@ The following documentation files provide detailed information about the CI/CD p
 
 - `docs/github-actions.md` - Comprehensive guide to the GitHub Actions workflow configuration
 - `docs/allure_customization_flow.md` - Visual diagram and explanation of the Allure report customization process
+- `docs/local-checks.md` - Detailed guide to local code quality checks, pre-commit hooks, and the local CI script
 
 ## Template Files
 

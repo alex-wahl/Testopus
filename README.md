@@ -362,6 +362,60 @@ pytest --framework=selenium tests  # or --framework=playwright (is not used atm)
 pytest --ai tests #  (is not used atm)
 ```
 
+## Local Code Quality Checks
+
+Testopus implements a robust local code quality checking system that ensures consistent code style and quality across the project.
+
+### Pre-commit Hooks
+
+Pre-commit hooks automatically run before each commit to catch issues early:
+
+```bash
+# Install pre-commit hooks (run once after cloning)
+pre-commit install
+
+# Install pre-push hooks (run once after cloning)
+pre-commit install --hook-type pre-push
+```
+
+The pre-commit hooks include:
+- **Formatting**: Black for code formatting, isort for import sorting
+- **Linting**: pylint and flake8 to catch code quality issues
+- **Type Checking**: mypy to verify type annotations
+- **File Checks**: Trailing whitespace removal, file ending standardization, YAML validation
+
+### Local CI Script
+
+The `local_ci_check.sh` script provides a comprehensive check of your code before pushing:
+
+```bash
+# Run all local CI checks
+./local_ci_check.sh
+```
+
+This script:
+1. Verifies all required tools are installed
+2. Runs pre-commit hooks
+3. Performs import sorting
+4. Applies code formatting
+5. Runs linting with flake8
+6. Performs static analysis with pylint
+7. Does type checking with mypy
+8. Runs unit tests
+9. Generates coverage reports
+
+### Integrating with your Workflow
+
+The best practice is to:
+1. Write your code
+2. Run `local_ci_check.sh` before committing
+3. Fix any issues reported
+4. Commit your changes
+5. Let pre-commit hooks catch any remaining issues
+6. Push your changes, with pre-push hooks providing a final safety check
+
+The CI/CD pipeline runs the same checks, ensuring consistent quality standards across local development and in the CI environment.
+
 ## Development Tools
 
 ### Code Quality Tools
