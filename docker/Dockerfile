@@ -1,7 +1,7 @@
 # Base image digest-pinned for reproducibility (Dependabot's docker watcher bumps it).
 # chromium/chromium-driver track this pinned Debian release; exact apt-version pinning is
 # deferred (brittle without a snapshot.debian.org source).
-FROM python:3.12-slim@sha256:d764629ce0ddd8c71fd371e9901efb324a95789d2315a47db7e4d27e78f1b0e9
+FROM python:3.14-slim@sha256:44dd04494ee8f3b538294360e7c4b3acb87c8268e4d0a4828a6500b1eff50061
 
 # Set environment variables to reduce Python output buffering and ensure pip doesn't use cache
 ENV PYTHONUNBUFFERED=1 \
