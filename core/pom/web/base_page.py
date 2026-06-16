@@ -21,8 +21,10 @@ from core.drivers.base import BaseDriver, ElementHandle
 class BasePage:
     TITLE = "head > title"
     TAG_NAME = "body"
-    DEFAULT_TIMEOUT = 3  # Single source of truth for element interaction timeouts
-    PAGE_LOAD_TIMEOUT = 10  # Longer timeout for page loads
+    # Single source of truth for waits; overridable via env for slow environments (e.g. CI
+    # against a freshly-booted dev server). Defaults preserve local/Docker behaviour.
+    DEFAULT_TIMEOUT = int(os.environ.get("SELENIUM_DEFAULT_TIMEOUT", "3"))
+    PAGE_LOAD_TIMEOUT = int(os.environ.get("SELENIUM_PAGE_LOAD_TIMEOUT", "10"))
 
     def __init__(self, driver: BaseDriver, url: str):
         # `driver` is a framework-agnostic BaseDriver (see core/drivers/), not a raw

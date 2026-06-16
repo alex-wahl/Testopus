@@ -345,18 +345,33 @@ jobs:
       - name: Seed database 🌱
         run: docker compose -f toolshop-compose.yml exec -T laravel-api php artisan migrate:fresh --seed
 
-      - name: Wait for API + UI 🕐
+      - name: Wait for API (status + seeded data) 🩺
         run: |
-          for i in $(seq 1 30); do
-            curl -sf http://localhost:8091/status >/dev/null && { echo "API ready"; break; }
-            echo "api attempt $i/30"; sleep 3
-          done
-          for i in $(seq 1 60); do
-            if [ "$(curl -s -o /dev/null -w '%{http_code}' http://localhost:4200)" = "200" ]; then
-              echo "UI ready"; break
+          for i in $(seq 1 40); do
+            if curl -sf http://localhost:8091/status >/dev/null \
+               && curl -sf http://localhost:8091/products | grep -q '"data"'; then
+              echo "API ready and serving seeded products"; exit 0
             fi
-            echo "ui attempt $i/60 — waiting 5s"; sleep 5
+            echo "api attempt $i/40 — waiting 3s"; sleep 3
           done
+          echo "API never served data"
+          docker compose -f toolshop-compose.yml logs laravel-api web | tail -100
+          exit 1
+
+      - name: Wait for Angular UI to compile 🅰️
+        run: |
+          # The prod compose serves the UI via `ng serve` (dev mode), which compiles lazily —
+          # an HTTP 200 on the shell does NOT mean the app is ready. Wait for the compile signal.
+          for i in $(seq 1 60); do
+            if docker compose -f toolshop-compose.yml logs angular-ui 2>&1 \
+               | grep -qiE "compiled successfully|bundle generation complete|listening on|Local:"; then
+              echo "Angular UI compiled"; break
+            fi
+            echo "ui-compile attempt $i/60 — waiting 5s"; sleep 5
+          done
+          # The first browser hit of an un-minified dev bundle is heavy; let it settle.
+          curl -s http://localhost:4200 >/dev/null || true
+          sleep 15
 
       - name: Set up Python
         uses: actions/setup-python@v6
@@ -370,6 +385,10 @@ jobs:
         env:
           TOOLSHOP_WEB_URL: http://localhost:4200
           TOOLSHOP_API_URL: http://localhost:8091
+          # The self-hosted ng-serve UI + local API are slower than the public CDN site, so
+          # raise the framework waits (defaults stay 3/10 everywhere else).
+          SELENIUM_DEFAULT_TIMEOUT: "20"
+          SELENIUM_PAGE_LOAD_TIMEOUT: "40"
           DOCKER_ENV: "true"
           PYTHONPATH: .
           TZ: Europe/Berlin
