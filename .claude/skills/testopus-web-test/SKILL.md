@@ -7,7 +7,7 @@ version: 0.1.0
 # Testopus — scaffold a web test suite
 
 Use this to add a class-based suite under `tests/ui_tests/web/<app>/test_<name>.py`. The reference
-suite is `tests/ui_tests/web/gasag/test_gasag.py`. It pairs with a Page Object (see the
+suite is `tests/ui_tests/web/toolshop/test_login.py`. It pairs with a Page Object (see the
 **`testopus-page-object`** skill) — **selectors live in the page object, never in the test**.
 
 ## Conventions (must follow)
@@ -15,7 +15,7 @@ suite is `tests/ui_tests/web/gasag/test_gasag.py`. It pairs with a Page Object (
 1. **Class-based suite** `Test<Name>` with class attrs (`BASE_URL = None`, plus any creds) populated
    once by an **autouse** fixture from the session `config`.
 2. **Config access**: `config['configuration']['<app>']['<key>']` — `<app>` matches the YAML block in
-   `config/yaml_configs/default.yaml`. Never hardcode URLs/credentials in the test.
+   `config/yaml_configs/default.yaml` (e.g. `toolshop`). Never hardcode URLs/credentials in the test.
 3. **Per-test page fixture** builds the page object from `driver`:
    `url = f"{self.BASE_URL}/{<Name>Page.PAGE_URL}"`.
 4. **`@retry`** wraps every flaky-prone test method:
@@ -55,7 +55,7 @@ class TestCheckout:
     @pytest.fixture(autouse=True)
     def setup_test_suite(self, config):
         if TestCheckout.BASE_URL is None:
-            self.BASE_URL = config['configuration']['shop']['web_url']
+            self.BASE_URL = config['configuration']['toolshop']['web_url']
 
     @pytest.fixture
     def checkout_page(self, driver):
@@ -66,7 +66,7 @@ class TestCheckout:
     def test_heading_is_shown(self, checkout_page):
         checkout_page.wait_for_element(CheckoutPage.HEADING)
         # Soft assertion: bare check.* call — do NOT wrap in `assert`, which would hard-fail and
-        # defeat the collect-all-failures purpose. Mirrors tests/ui_tests/web/gasag/test_gasag.py.
+        # defeat the collect-all-failures purpose. Mirrors tests/ui_tests/web/toolshop/test_products.py.
         check.is_in(
             CheckoutPage.TEXT_HEADING,
             checkout_page.get_text(CheckoutPage.HEADING),

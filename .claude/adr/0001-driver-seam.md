@@ -37,8 +37,9 @@ tests are unaffected.
 
 - `--framework` is meaningful; a Playwright/Appium backend can be added behind the Protocol without
   forking page objects, and AI layers can mock `BaseDriver`.
-- The deterministic Selenium path is preserved. **The gasag UI suite (`hatch run ui:web`) is the
-  regression gate** and must pass in CI (requires a live browser + the target site).
+- The deterministic Selenium path is preserved. **The Toolshop UI suite (`hatch run ui:web`) is the
+  regression gate** and must pass in CI (requires a live browser + the public Toolshop demo site).
+  See ADR-0003 for the switch from the private gasag target to Toolshop.
 - `js_input` now passes its value as a bound script argument (no f-string injection), the timeout
   constant is the single source of truth, and `WebDriverWait` owns polling.
 

@@ -21,6 +21,9 @@ Each item lists **Affects** (what changes) and **Value** (why it's worth doing).
 `fix/antipatterns-audit` (verify with `git diff main...fix/antipatterns-audit`). Remaining work is the
 AI/ML layer; code changes still go through the `code-reviewer` → `writer` gate.
 
+> **Historical note:** This roadmap was written against the gasag suite. The gasag suite was later
+> replaced by the public Toolshop demo target and an API layer was added. See ADR-0003.
+
 ---
 
 ## Now — correctness, security, and signal (small, high-leverage, mostly new)

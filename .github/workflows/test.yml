@@ -15,6 +15,7 @@ on:
         options:
           - all
           - ui
+          - api
           - internal
       debug_mode:
         description: 'Enable debug output'
@@ -117,7 +118,11 @@ jobs:
             docker compose -f docker/docker-compose.yml run --rm testopus --verbose -vv --alluredir=/app/reports/allure-results --html=/app/reports/html/report.html --junitxml=/app/reports/junit/report_ui.xml /app/tests/ui_tests/web ${{ github.event.inputs.custom_flags }}
           elif [ "${{ github.event.inputs.test_suite }}" = "internal" ]; then
             docker compose -f docker/docker-compose.yml run --rm testopus --verbose -vv --alluredir=/app/reports/allure-results --html=/app/reports/html/report.html --junitxml=/app/reports/junit/report_internal.xml /app/tests/internal_tests ${{ github.event.inputs.custom_flags }}
+          elif [ "${{ github.event.inputs.test_suite }}" = "api" ]; then
+            docker compose -f docker/docker-compose.yml run --rm testopus --verbose -vv --alluredir=/app/reports/allure-results --html=/app/reports/html/report.html --junitxml=/app/reports/junit/report_api.xml /app/tests/api_tests ${{ github.event.inputs.custom_flags }}
           else
+            # "all" runs every suite in one container so they share one Allure report:
+            # web (headless Chromium) + internal self-tests + API (HTTP, no browser).
             docker compose -f docker/docker-compose.yml run --rm testopus --verbose -vv --alluredir=/app/reports/allure-results --html=/app/reports/html/report.html --junitxml=/app/reports/junit/report_all.xml /app/tests ${{ github.event.inputs.custom_flags }}
           fi
         env:

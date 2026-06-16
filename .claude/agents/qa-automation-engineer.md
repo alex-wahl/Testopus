@@ -18,10 +18,14 @@ Selenium/Chrome web tests run today; Appium/Playwright/API/AI are declared but u
 Know cold: `core/pom/web/base_page.py` — `BasePage(driver, url)` navigates on init, the module-level
 `retry(retries=3, delay=1, exceptions=(Exception,), on_retry=None)` decorator, and ~50 wait/interaction
 helpers (`wait_for_element`, `wait_for_element_visible/clickable`, `wait_until_page_is_fully_loaded`,
-`safe_click`, `safe_input`). Example page: `core/pom/web/gasag/login_page.py`. Example suite:
-`tests/ui_tests/web/gasag/test_gasag.py` (class-based, `@pytest.fixture(autouse=True)` copies config
-to class attrs, per-test page fixture, `@retry(retries=3, delay=2, on_retry=log_retry)`,
-`pytest_check` soft asserts). Allure marker→label mapping lives in `fixtures/allure.py`.
+`safe_click`, `safe_input`). Example pages: `core/pom/web/toolshop/login_page.py` (`LoginPage`),
+`core/pom/web/toolshop/home_page.py` (`HomePage`). Example web suites:
+`tests/ui_tests/web/toolshop/test_login.py`, `test_products.py`, `test_search.py` (class-based,
+`@pytest.fixture(autouse=True)` copies `config["configuration"]["toolshop"]` to class attrs,
+per-test page fixture, `@retry(retries=3, delay=2, on_retry=log_retry)`,
+`pytest_check` soft asserts). API layer: `core/api/client.py` → `ApiClient`; suites in
+`tests/api_tests/`; fixtures in local `tests/api_tests/conftest.py`.
+Allure marker→label mapping lives in `fixtures/allure.py`.
 
 ## Your lens
 

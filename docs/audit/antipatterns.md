@@ -16,6 +16,9 @@
 > **Exception — AP-08 caveat:** the live gasag UI regression suite (`hatch run ui:web`) requires a
 > real browser and the live target site; it was NOT run as part of this fix-set and must pass in CI
 > before the branch is merged.
+>
+> **Historical note:** The gasag suite was later removed and replaced by the public Toolshop demo
+> target (`hatch run ui:web` now runs `tests/ui_tests/web/toolshop/`). See ADR-0003.
 
 Every finding below was confirmed by re-reading the cited `file:line`. Severity reflects
 *irreversibility × blast radius*, deliberately keeping **Blocker** for false verdicts, data loss, and

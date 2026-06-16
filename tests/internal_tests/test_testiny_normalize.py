@@ -35,7 +35,7 @@ def _full_case():
         "precondition_text": "User is on the login page.",
         "steps_text": "1. Enter a wrong password.\n2. Submit.",
         "expected_result_text": "An error message is shown.",
-        "cf__app": "gasag",
+        "cf__app": "toolshop",
         "cf__page": "login",
     }
 
@@ -46,7 +46,7 @@ def test_full_case_front_matter():
     assert front["testiny_id"] == 123
     assert front["project_id"] == 42
     assert front["title"] == "Login rejects invalid credentials"
-    assert front["app"] == "gasag"
+    assert front["app"] == "toolshop"
     assert front["page"] == "login"
     assert front["priority"] == "high"
     assert front["severity"] == "critical"
@@ -100,13 +100,13 @@ def test_custom_field_names_are_configurable():
     case = _full_case()
     del case["cf__app"]
     del case["cf__page"]
-    case["cf__application"] = "gasag"
+    case["cf__application"] = "toolshop"
     case["cf__screen"] = "login"
     spec = testiny_case_to_spec(
         case, app_field="cf__application", page_field="cf__screen"
     )
     front, _ = _split_spec(spec)
-    assert front["app"] == "gasag"
+    assert front["app"] == "toolshop"
     assert front["page"] == "login"
 
 

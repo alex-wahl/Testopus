@@ -77,5 +77,7 @@ class TestLoadConfig:
     def test_env_interpolation_is_recursive(self, tmp_path, monkeypatch):
         monkeypatch.setenv("PW", "s3cret")
         cfg = tmp_path / "c.yaml"
-        cfg.write_text("configuration:\n  gasag:\n    password: ${PW}\n")
-        assert load_config(str(cfg))["configuration"]["gasag"]["password"] == "s3cret"
+        cfg.write_text("configuration:\n  toolshop:\n    password: ${PW}\n")
+        assert (
+            load_config(str(cfg))["configuration"]["toolshop"]["password"] == "s3cret"
+        )

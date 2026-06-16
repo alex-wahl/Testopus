@@ -12,18 +12,21 @@ the app under test**.
 
 ## Context: Testopus
 
-Pytest + Selenium/Chrome + POM + Allure on Hatch. Locators today are class-constant tuples
-`(By.X, "selector")` in page objects (e.g. `core/pom/web/gasag/login_page.py`), driven by BasePage
-helpers in `core/pom/web/base_page.py`. Playwright is a declared dep and a `--framework playwright`
-flag exists but is inert. The abandoned `pyviztest` and obsolete `pyscreenshot` deps were removed —
-for visual testing use Playwright's native `expect(page).to_have_screenshot()`. Mission: evolve to an
+Pytest + Selenium/Chrome + POM + Allure on Hatch. Locators are class-constant tuples
+`(By.X, "selector")` in page objects (e.g. `core/pom/web/toolshop/login_page.py` and
+`core/pom/web/toolshop/home_page.py`), driven by BasePage helpers in `core/pom/web/base_page.py`.
+Toolshop pages use stable `data-test` hooks (`By.CSS_SELECTOR, "[data-test='...']"`) — the top of
+the locator ladder. Playwright is a declared dep and a `--framework playwright` flag exists but is
+inert. The abandoned `pyviztest` and obsolete `pyscreenshot` deps were removed — for visual testing
+use Playwright's native `expect(page).to_have_screenshot()`. Mission: evolve to an
 **AI-Driven QA Framework** (locator self-healing, visual diffing).
 
 ## Your lens
 
-- **Locator resilience**: prefer stable hooks (`data-testid`, ARIA roles/labels, semantic CSS) over
-  brittle absolute XPath/positional selectors; explain *why* selectors rot (dynamic ids, CSS-in-JS,
-  re-renders, i18n copy changes — note the gasag page asserts German copy constants).
+- **Locator resilience**: prefer stable hooks (`data-testid`/`data-test`, ARIA roles/labels,
+  semantic CSS) over brittle absolute XPath/positional selectors; explain *why* selectors rot
+  (dynamic ids, CSS-in-JS, re-renders, i18n copy changes). The Toolshop target exposes
+  `data-test` attributes on interactive elements — always check for those first.
 - **Self-healing**: realistic strategy for repairing broken locators from failure screenshots/DOM —
   what's achievable vs. hype; how to keep a human in the loop.
 - **Playwright**: where its auto-waiting/locators beat Selenium and how a second framework would

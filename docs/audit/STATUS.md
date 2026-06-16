@@ -14,6 +14,8 @@
 - **Best practices — all now-actionable items adopted; the AI/ML section stays roadmap.**
 - **Verification:** `ruff` / `black` / `mypy` pass; 36 internal tests pass; 48 tests collect. Live gasag
   UI suite (`hatch run ui:web`) not run locally (no browser) → must pass in CI before merge.
+- **Historical note:** The gasag suite was later replaced by the public Toolshop demo target;
+  see ADR-0003.
 
 ## Antipatterns ([antipatterns.md](antipatterns.md)) — 26/26
 

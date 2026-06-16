@@ -9,6 +9,10 @@
 > `frontend-engineer`, `devops-engineer`, `ai-engineer`, `ml-engineer`, `data-engineer`, `architect`.
 > **Topic:** G1 — which MyStars.tg CLAUDE.md practices to adopt; G2 — the AI-Driven QA skills/commands
 > set + phased roadmap.
+>
+> **Historical note:** This decision was written when the project used the private gasag suite as its
+> example target. The gasag suite was later removed and replaced by the public Toolshop demo target.
+> See ADR-0003.
 
 ---
 

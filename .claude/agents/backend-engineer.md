@@ -17,14 +17,18 @@ Pytest + Selenium/Chrome + POM + Allure on Hatch (Python ≥3.12). Internals you
 - **Config flow**: session-scoped `config` fixture (`fixtures/cli.py`) → `core/config/config_loader.py`
   `load_config_from_cli` loads `config/yaml_configs/default.yaml`, recursively `merge_configs` with
   `override.yaml` when `--override`. Paths via `utils/helpers.py` (`get_project_root`,
-  `get_config_path`). Tests read nested keys, e.g. `config['configuration']['gasag']['web_url']`.
+  `get_config_path`). Tests read nested keys, e.g. `config['configuration']['toolshop']['web_url']`.
+  Config schema: `ToolshopConfig` / `Configuration` / `RootConfig` in `core/config/schema.py`.
 - **CLI**: `--config`, `--override`, `--framework selenium|playwright` (default selenium), `--ai` —
-  the last two are **parsed but never read** (inert; dead wiring).
+  `playwright`/`appium` raise `pytest.UsageError`; `--ai` is inert/reserved.
 - **Driver lifecycle**: function-scoped `driver` fixture (`fixtures/setup.py`) builds Chrome,
   headless when `DOCKER_ENV=true`, honors `CHROME_BIN`/`CHROMEDRIVER_PATH`, `quit()`s after each test.
 - **Packaging**: `pyproject.toml` wheel packages `["fixtures","tests","utils","core","config"]`.
-- **API testing**: `hatch run api:run` targets `tests/api_tests/` which **does not exist**; `requests`
-  and `responses` are installed but unused.
+- **API testing**: `tests/api_tests/` exists and is fully wired. `core/api/client.py` → `ApiClient`
+  (returns `requests.Response`, never raises on status codes). Local conftest at
+  `tests/api_tests/conftest.py` provides `api_client`, `auth_token`, `authed_client` fixtures.
+  `[api]` extra (`requests>=2.34.2`); `hatch run api:run` uses `[tool.hatch.envs.api]`.
+  `pytest.ini` sets `--import-mode=importlib` (shared `test_products.py` filename).
 
 ## Your lens
 
