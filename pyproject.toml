@@ -1,14 +1,15 @@
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling>=1.30.1"]
 build-backend = "hatchling.build"
 
 [project]
 name = "Testopus"
 version = "0.0.1"
-description = """A Python-based test automation framework combining Pytest, Selenium, Appium, Playwright, and AI/Google integrations under one roof. Streamline multi-platform testing with YAML-driven configs, POM architecture, and robust, extensible tooling."""
+description = """A Pytest-based UI test-automation framework: Selenium/Chrome driving web pages via a Page Object Model, with Allure reporting and a CI pipeline that publishes trend reports to GitHub Pages. Playwright, Appium, API, and AI integrations are on the roadmap, not yet implemented."""
 readme = "README.md"
 requires-python = ">=3.12"
-license-files = { paths = ["LICENSE.txt"] }
+license = "MIT"
+license-files = ["LICENSE"]
 authors = [
   { name = "Alexander Wahl", email = "alexander@alexanderwahl.eu" },
 ]
@@ -22,48 +23,82 @@ keywords = [
   "ai",
 ]
 
+# Single source of truth for runtime/test dependencies. `>=` floors only (Dependabot raises them;
+# see .github/dependabot.yml and the "Dependency currency" section of CLAUDE.md). Add a dependency
+# only when code actually imports it.
 dependencies = [
-  "pytest>=8.3.4",
-  "pytest-asyncio>=0.25.3",
-  "pytest-mock>=3.14.0",
-  "pytest-xdist==3.6.1",
-  "pytest-check==2.3.1",
-  "selenium==4.29.0",
-  "Appium-Python-Client==4.5.1",
-  "playwright==1.50.0",
-  "allure-pytest>=2.13.5",
-  "responses>=0.25.6",
-  "Faker==37.0.0",
-  "pyscreenshot==3.1",
-  "pyviztest==1.0.0",
-  "pydantic>=2.10.6",
-  "pydantic-ai==0.0.36",
-  "langchain==0.1.12",
-  "pyyaml>=6.0.2",
-  "python-dotenv==1.0.1",
-  "isort>=5.13.2",
-  "requests>=2.31.0",
-  "pytest-html>=3.2.0"
+  "pytest>=9.1.0",
+  "pytest-asyncio>=1.4.0",
+  "pytest-mock>=3.15.1",
+  "pytest-xdist>=3.8.0",
+  "pytest-check>=2.8.0",
+  "selenium>=4.45.0",
+  "allure-pytest>=2.16.0",
+  # Used for fail-fast config validation (core/config/schema.py + config_loader._validate_config).
+  # Will also serve the future telemetry models (roadmap).
+  "pydantic>=2.13.4",
+  "pyyaml>=6.0.3",
+  "python-dotenv>=1.2.2",
+  "pytest-html>=4.2.0",
 ]
+
+[project.optional-dependencies]
+# Linting / formatting / type-checking tools (used by the `default` Hatch env scripts).
+dev = [
+  "black>=26.5.1",
+  "mypy>=2.1.0",
+  "ruff>=0.15.17",
+  "isort>=8.0.1",
+]
+# Test-only extras on top of the core test deps above.
+test = [
+  "pytest-cov>=7.1.0",
+  "requests>=2.34.2",
+  "Faker>=40.23.0",
+]
+# Future framework backends — declared but not yet wired (see core/drivers/factory.py).
+# Install with `pip install -e .[frameworks]` when implementing the Playwright/Appium seam.
+frameworks = [
+  "playwright>=1.60.0",
+  "Appium-Python-Client>=5.3.1",
+]
+
+# Project URLs (surfaced on PyPI and by tooling). Repository is the canonical source; Documentation
+# points at the published Allure report on GitHub Pages.
+[project.urls]
+Homepage = "https://github.com/alex-wahl/Testopus"
+Repository = "https://github.com/alex-wahl/Testopus"
+Documentation = "https://alex-wahl.github.io/Testopus"
+Issues = "https://github.com/alex-wahl/Testopus/issues"
+
+# Pin formatter/linter to the project's minimum Python so `hatch run format`/`lint` and the CI
+# lint-gate are deterministic across machines (and Black doesn't auto-target a newer Python).
+[tool.black]
+line-length = 88
+target-version = ["py312"]
+
+[tool.ruff]
+line-length = 88
+target-version = "py312"
+
+# Namespace packages (no __init__.py) need explicit bases so mypy doesn't see a module
+# under two names; missing third-party stubs (selenium/allure/…) are ignored.
+[tool.mypy]
+python_version = "3.12"
+explicit_package_bases = true
+namespace_packages = true
+ignore_missing_imports = true
 
 [tool.hatch.envs.default]
-dependencies = [
-  "black>=23.3.0",
-  "mypy>=1.3.0",
-  "ruff>=0.0.272",
-]
+features = ["dev"]
 
 [tool.hatch.envs.default.scripts]
-format = "black src tests"
-lint = "ruff check src tests"
-typecheck = "mypy src"
+format = "black core fixtures utils config tests"
+lint = "ruff check core fixtures utils config tests"
+typecheck = "mypy core fixtures utils"
 
 [tool.hatch.envs.test]
-dependencies = [
-  "pytest>=8.3.4",
-  "pytest-cov>=4.1.0",
-  "pytest-mock>=3.14.0",
-]
+features = ["test"]
 
 [tool.hatch.envs.test.scripts]
 run = "pytest {args:tests}"
@@ -76,27 +111,17 @@ run-all-reports = "pytest --alluredir=reports/allure-results --html=reports/html
 view-allure = "allure serve reports/allure-results"
 generate-allure = "allure generate reports/allure-results -o reports/allure-report --clean && allure open reports/allure-report"
 
+# selenium comes from the project's own dependencies; the Playwright/Appium backends live
+# in the optional [frameworks] extra (not yet wired).
 [tool.hatch.envs.ui]
-dependencies = [
-  "pytest>=8.3.4",
-  "selenium==4.29.0",
-  "playwright==1.50.0",
-]
 
 [tool.hatch.envs.ui.scripts]
 web = "pytest {args:tests/ui_tests/web}"
 # Uncomment when mobile tests are added
 # mobile = "pytest {args:tests/ui_tests/mobile}"
 
-[tool.hatch.envs.api]
-dependencies = [
-  "pytest>=8.3.4",
-  "requests>=2.31.0",
-  "responses>=0.25.6",
-]
-
-[tool.hatch.envs.api.scripts]
-run = "pytest {args:tests/api_tests}"
+# NOTE: the `api` env/script was removed — tests/api_tests/ does not exist yet. Re-add it
+# (with an [api] extra for requests/responses) when API testing actually lands.
 
 # Build configuration for wheel - fixes "Unable to determine which files to ship" error
 [tool.hatch.build.targets.wheel]
@@ -110,7 +135,7 @@ packages = ["fixtures", "tests", "utils", "core", "config"]
 #   "mkdocstrings>=0.24.0",
 #   "mkdocstrings-python>=1.7.5"
 # ]
-# 
+#
 # [tool.hatch.envs.docs.scripts]
 # build = "mkdocs build"
 # serve = "mkdocs serve"

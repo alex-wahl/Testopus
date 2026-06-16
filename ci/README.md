@@ -14,7 +14,6 @@ This directory contains scripts, templates and configuration files used in the C
     - `date_formatter.js` - Handles date format standardization
     - `branch_position.js` - Positions branch info in environment table
     - `inline_date_formatter.js` - Injected into app.js for fixing dynamic content
-- `requirements.txt` - Python dependencies needed for CI/CD scripts
 
 ## Main CI/CD Workflow
 
@@ -28,7 +27,6 @@ The main CI/CD workflow is defined in `.github/workflows/test.yml` and follows t
 2. **Environment Setup:**
    - Sets up Python 3.12
    - Installs Hatch package manager
-   - Installs CI dependencies from `ci/requirements.txt`
    - Creates report directories
 
 3. **Docker Setup:**
@@ -96,8 +94,8 @@ python customize_allure_report.py --dry-run
 
 The following documentation files provide detailed information about the CI/CD pipeline:
 
-- `docs/github-actions.md` - Comprehensive guide to the GitHub Actions workflow configuration
-- `docs/allure_customization_flow.md` - Visual diagram and explanation of the Allure report customization process
+- `../docs/ci/github-actions.md` - Comprehensive guide to the GitHub Actions workflow configuration
+- `../docs/ci/allure_customization_flow.md` - Visual diagram and explanation of the Allure report customization process
 
 ## Template Files
 
@@ -142,7 +140,7 @@ When adding new CI/CD components:
 2. Extract all HTML, CSS and JavaScript to template files in the `templates/` directory
 3. Use environment variables for configuration where possible
 4. Update this README with documentation on new components
-5. Update `requirements.txt` if new dependencies are required
+5. Add any new CI-script dependencies to `pyproject.toml` (the single source of truth) — there is no separate `ci/requirements.txt`; the post-processing scripts use only the Python standard library
 6. Make scripts executable with `chmod +x` if they are meant to be run directly
 7. Add new steps to the GitHub Actions workflow as needed
 8. Follow the separation of concerns principle - keep code, templates, and configuration separate 

@@ -1,7 +1,0 @@
-configuration:
-  default: 10
-  max_speed: 100
-
-startrack:
-  enabled: true
-  url: "https://startrack.com"

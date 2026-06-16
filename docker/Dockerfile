@@ -1,4 +1,7 @@
-FROM python:3.12-slim
+# Base image digest-pinned for reproducibility (Dependabot's docker watcher bumps it).
+# chromium/chromium-driver track this pinned Debian release; exact apt-version pinning is
+# deferred (brittle without a snapshot.debian.org source).
+FROM python:3.12-slim@sha256:d764629ce0ddd8c71fd371e9901efb324a95789d2315a47db7e4d27e78f1b0e9
 
 # Set environment variables to reduce Python output buffering and ensure pip doesn't use cache
 ENV PYTHONUNBUFFERED=1 \
@@ -26,31 +29,17 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Set up working directory
 WORKDIR /app
 
-# Copy only the files needed for dependency installation
+# Copy project metadata + the source packages needed for an editable install.
+# pyproject.toml is the SINGLE SOURCE OF TRUTH for dependencies — no hand-maintained list here.
 COPY pyproject.toml README.md ./
+COPY core ./core
+COPY fixtures ./fixtures
+COPY utils ./utils
+COPY config ./config
+COPY tests ./tests
 
-# Install core dependencies directly
-RUN pip install --no-cache-dir \
-    pytest>=8.3.4 \
-    pytest-asyncio>=0.25.3 \
-    pytest-mock>=3.14.0 \
-    pytest-xdist==3.6.1 \
-    pytest-check==2.3.1 \
-    selenium==4.29.0 \
-    Appium-Python-Client==4.5.1 \
-    playwright==1.50.0 \
-    allure-pytest>=2.13.5 \
-    responses>=0.25.6 \
-    pydantic>=2.10.6 \
-    requests>=2.31.0 \
-    pytest-html>=3.2.0 \
-    Faker==37.0.0 \
-    pyscreenshot==3.1 \
-    pyviztest==1.0.0 \
-    pydantic-ai==0.0.36 \
-    langchain==0.1.12 \
-    pyyaml>=6.0.2 \
-    python-dotenv==1.0.1
+# Install the project plus its "test" extra straight from pyproject.toml.
+RUN pip install --no-cache-dir -e ".[test]"
 
 # Copy the rest of the code
 COPY . .

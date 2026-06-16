@@ -15,7 +15,6 @@ on:
         options:
           - all
           - ui
-          - api
           - internal
       debug_mode:
         description: 'Enable debug output'
@@ -40,6 +39,10 @@ concurrency:
   group: "pages"
   cancel-in-progress: false
 
+# Pinned external-tool version, bumped here in one place (Dependabot doesn't manage this binary).
+env:
+  ALLURE_VERSION: "2.42.1"
+
 jobs:
   # Test job
   test:
@@ -55,10 +58,7 @@ jobs:
           
       - name: Install Hatch
         run: pip install hatch
-      
-      - name: Install CI dependencies
-        run: pip install -r ci/requirements.txt
-      
+
       # Make sure reports directories exist
       - name: Prepare directories
         run: |
@@ -67,7 +67,6 @@ jobs:
           mkdir -p reports/junit
           mkdir -p reports/screenshots
           mkdir -p reports/allure-report
-          chmod -R 777 reports
           echo "Listing test directories:"
           find tests -type f -name "test_*.py" | sort
       
@@ -86,7 +85,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: /tmp/.buildx-cache
-          key: ${{ runner.os }}-buildx-${{ github.sha }}
+          key: ${{ runner.os }}-buildx-${{ hashFiles('docker/Dockerfile', 'pyproject.toml') }}
           restore-keys: |
             ${{ runner.os }}-buildx-
       
@@ -111,10 +110,11 @@ jobs:
       
       - name: Run tests
         run: |
+          # Run the container as the host UID/GID so report files are owned by the runner
+          # (replaces the chmod -R 777 workaround); these feed docker-compose's `user:`.
+          export TESTOPUS_UID="$(id -u)" TESTOPUS_GID="$(id -g)"
           if [ "${{ github.event.inputs.test_suite }}" = "ui" ]; then
             docker compose -f docker/docker-compose.yml run --rm testopus --verbose -vv --alluredir=/app/reports/allure-results --html=/app/reports/html/report.html --junitxml=/app/reports/junit/report_ui.xml /app/tests/ui_tests/web ${{ github.event.inputs.custom_flags }}
-          elif [ "${{ github.event.inputs.test_suite }}" = "api" ]; then
-            docker compose -f docker/docker-compose.yml run --rm testopus --verbose -vv --alluredir=/app/reports/allure-results --html=/app/reports/html/report.html --junitxml=/app/reports/junit/report_api.xml /app/tests/api_tests ${{ github.event.inputs.custom_flags }}
           elif [ "${{ github.event.inputs.test_suite }}" = "internal" ]; then
             docker compose -f docker/docker-compose.yml run --rm testopus --verbose -vv --alluredir=/app/reports/allure-results --html=/app/reports/html/report.html --junitxml=/app/reports/junit/report_internal.xml /app/tests/internal_tests ${{ github.event.inputs.custom_flags }}
           else
@@ -161,7 +161,7 @@ jobs:
       - name: Set up Allure
         if: always()
         run: |
-          wget -O allure-commandline.zip https://repo.maven.apache.org/maven2/io/qameta/allure/allure-commandline/2.24.0/allure-commandline-2.24.0.zip
+          wget -O allure-commandline.zip "https://repo.maven.apache.org/maven2/io/qameta/allure/allure-commandline/${ALLURE_VERSION}/allure-commandline-${ALLURE_VERSION}.zip"
           unzip allure-commandline.zip
       
       # Generate Allure report
@@ -182,7 +182,7 @@ jobs:
             fi
             
             # Generate the report
-            ./allure-2.24.0/bin/allure generate reports/allure-results -o reports/allure-report --clean
+            "./allure-${ALLURE_VERSION}/bin/allure" generate reports/allure-results -o reports/allure-report --clean
             
             # Check if report generation was successful
             if [ $? -ne 0 ]; then
@@ -230,7 +230,7 @@ jobs:
       # Optional: Publish test results
       - name: Publish Test Results
         if: always()
-        uses: EnricoMi/publish-unit-test-result-action@v2
+        uses: EnricoMi/publish-unit-test-result-action@d0a4676d0e0b938bc201470d88276b7c74c712b3  # v2.24.0
         with:
           files: reports/junit/report*.xml
           check_name: Test Results
@@ -246,7 +246,7 @@ jobs:
       # For direct branch upload - GitHub Pages is configured to use the 'reporting' branch
       - name: Deploy to reporting branch
         if: always()
-        uses: peaceiris/actions-gh-pages@v3
+        uses: peaceiris/actions-gh-pages@373f7f263a76c20808c831209c920827a82a2847  # v3 (v3.x)
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: ./reports/allure-report
@@ -282,3 +282,25 @@ jobs:
               repo: context.repo.repo,
               body: comment
             });
+
+  # Fast advisory static-analysis gate: lint + type-check + a collection smoke test.
+  # Advisory (continue-on-error) for now — the existing codebase isn't fully lint/type-clean;
+  # flip to a hard gate once it is. `--collect-only` cheaply catches pytest/plugin-compat
+  # breakage on Dependabot PRs (per CLAUDE.md "Dependency currency").
+  lint:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install Hatch
+        run: pip install hatch
+      - name: Lint and type-check
+        run: |
+          hatch run lint
+          hatch run typecheck
+      - name: Collect tests (plugin/compat smoke)
+        run: hatch run test:run --collect-only

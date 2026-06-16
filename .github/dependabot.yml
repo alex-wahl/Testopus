@@ -1,0 +1,49 @@
+# Keeps Testopus dependencies current automatically (project goal: "always current").
+# - pip: reads version constraints from pyproject.toml (PEP 621 + Hatch) — no lockfile needed.
+# - github-actions: bumps action versions in .github/workflows/*.
+# - docker: bumps the base image in docker/Dockerfile.
+# Minor/patch Python updates are batched into one weekly PR; every MAJOR bump opens its own PR
+# so breaking changes get individual review. The existing CI test job validates each PR.
+version: 2
+updates:
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 10
+    labels:
+      - "dependencies"
+      - "python"
+    commit-message:
+      prefix: "chore(deps)"
+      prefix-development: "chore(deps-dev)"
+    groups:
+      python-minor-patch:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    labels:
+      - "dependencies"
+      - "ci"
+    commit-message:
+      prefix: "chore(ci)"
+
+  - package-ecosystem: "docker"
+    directory: "/docker"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    labels:
+      - "dependencies"
+      - "docker"
+    commit-message:
+      prefix: "chore(docker)"
