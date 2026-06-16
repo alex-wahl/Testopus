@@ -91,7 +91,7 @@ jobs:
       
       # Build Docker image directly without registry login
       - name: Build Docker image
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: ./docker/Dockerfile
