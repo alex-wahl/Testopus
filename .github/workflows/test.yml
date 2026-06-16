@@ -246,7 +246,7 @@ jobs:
       # For direct branch upload - GitHub Pages is configured to use the 'reporting' branch
       - name: Deploy to reporting branch
         if: always()
-        uses: peaceiris/actions-gh-pages@373f7f263a76c20808c831209c920827a82a2847  # v3 (v3.x)
+        uses: peaceiris/actions-gh-pages@84c30a85c19949d7eee79c4ff27748b70285e453  # v3 (v3.x)
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: ./reports/allure-report
