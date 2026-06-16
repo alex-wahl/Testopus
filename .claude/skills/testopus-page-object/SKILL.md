@@ -9,7 +9,7 @@ version: 0.1.0
 Use this to add a new page class under `core/pom/web/<app>/<name>_page.py`. Every page **extends
 `BasePage`** (`core/pom/web/base_page.py`), whose `__init__(driver, url)` navigates to `url` on
 construction and provides ~40 wait/interaction helpers. The reference page is
-`core/pom/web/gasag/login_page.py`.
+`core/pom/web/toolshop/login_page.py`.
 
 ## Conventions (must follow)
 
@@ -76,7 +76,7 @@ class CheckoutPage(BasePage):
 
 ## Steps
 
-1. Confirm the `<app>` package (e.g. `gasag`) and create `core/pom/web/<app>/<name>_page.py`
+1. Confirm the `<app>` package (e.g. `toolshop`) and create `core/pom/web/<app>/<name>_page.py`
    (add an `__init__.py` if the package is new).
 2. Fill in the URL constant, locators, copy constants, and action methods per the template.
 3. Add the matching test suite with the **`testopus-web-test`** skill (locators stay in the page).

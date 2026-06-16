@@ -6,9 +6,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Testopus is a Pytest-based **UI test automation framework**: Selenium/Chrome driving web pages via a
 Page Object Model, with Allure reporting and a CI pipeline that publishes trend reports to GitHub
-Pages. Only Selenium/Chrome web tests are implemented today. Playwright and Appium are declared in
-the `[frameworks]` optional extra and backed by a `core/drivers/` seam — the Protocol is in place,
-but the concrete backends are not yet built. API testing and AI integrations are roadmap items only.
+Pages. Selenium/Chrome web tests and a REST API layer against the public Practice Software Testing
+"Toolshop" demo (https://practicesoftwaretesting.com) are both implemented today. Playwright and
+Appium are declared in the `[frameworks]` optional extra and backed by a `core/drivers/` seam —
+the Protocol is in place, but the concrete backends are not yet built. AI integrations are roadmap
+items only.
 
 Python `>=3.12`. Local UI runs need Chrome + chromedriver (or use Docker, which bundles headless Chromium).
 
@@ -26,12 +28,13 @@ Run tests (the `{args}` placeholder forwards extra pytest flags):
 ```bash
 hatch run test:run                # all tests            (pytest tests)
 hatch run ui:web                  # web UI tests         (pytest tests/ui_tests/web)
+hatch run api:run                 # API tests            (pytest tests/api_tests)
 hatch run test:internal           # framework self-tests (pytest tests/internal_tests)
-hatch run test:run -k email_field # forward pytest args, e.g. keyword filter
+hatch run test:run -k search      # forward pytest args, e.g. keyword filter
 
 # Direct pytest works too (pytest.ini sets pythonpath=.):
-pytest tests/ui_tests/web/gasag/test_gasag.py                                   # single file
-pytest tests/ui_tests/web/gasag/test_gasag.py::TestGasag::test_email_field_is_accepting_email_addresses  # single test
+pytest tests/ui_tests/web/toolshop/test_login.py                                # single file
+pytest tests/ui_tests/web/toolshop/test_login.py::TestLogin::test_login_with_invalid_credentials_shows_error
 ```
 
 CLI options (registered in `fixtures/cli.py`): `--override` (merge `override.yaml`), `--framework
@@ -64,11 +67,11 @@ docker-compose -f docker/docker-compose.yml up --remove-orphans
 `core/config/config_loader.py::load_config_from_cli`, which loads `config/yaml_configs/default.yaml`
 and, when `--override` is set, recursively merges `override.yaml` over it (`merge_configs`). The
 assembled dict is then passed through `_validate_config()`, which runs Pydantic v2
-(`core/config/schema.py`: `GasagConfig` / `Configuration` / `RootConfig`, all `extra="allow"`) and
+(`core/config/schema.py`: `ToolshopConfig` / `Configuration` / `RootConfig`, all `extra="allow"`) and
 raises `ConfigError` on a bad shape — fail-fast before any test touches the config. Returns the
 same dict, so all dict-based consumers are unchanged. Paths resolve through `utils/helpers.py`
 (`get_project_root`, `get_config_path`). Tests read nested keys, e.g.
-`config['configuration']['gasag']['web_url']`.
+`config['configuration']['toolshop']['web_url']`.
 
 **Driver.** The function-scoped `driver` fixture (`fixtures/setup.py`) calls
 `core.drivers.factory.create_driver(framework)` and `quit()`s it after each test. `create_driver`
@@ -81,18 +84,34 @@ builds a `SeleniumDriver` wrapping Chrome (headless when `DOCKER_ENV=true`, hono
 **Page Object Model** (`core/pom/web/`). Every page extends `BasePage` (`base_page.py`), whose
 `__init__(driver: BaseDriver, url)` navigates to the URL on construction and which provides ~50
 wait/interaction helpers (`DEFAULT_TIMEOUT=3`, `PAGE_LOAD_TIMEOUT=10`). Page subclasses (e.g.
-`gasag/login_page.py` `LoginPage`) define **locators as class-constant tuples** `(By.X, "selector")`,
-**expected copy as ALL_CAPS string constants**, and **snake_case action methods** (e.g. `login()`).
+`toolshop/login_page.py` `LoginPage`, `toolshop/home_page.py` `HomePage`) define **locators as
+class-constant tuples** `(By.X, "selector")`, **expected copy as ALL_CAPS string constants**, and
+**snake_case action methods** (e.g. `login()`, `search()`). Toolshop pages use stable
+`data-test` hooks as `By.CSS_SELECTOR` (`[data-test='...']`) — the top of the locator ladder.
 Never hardcode selectors in tests — reference the page-class constants.
 
-**Test conventions** (see `tests/ui_tests/web/gasag/test_gasag.py`):
-- Class-based suites (`TestGasag`) with `test_*` methods; a class-scoped `autouse` fixture copies
-  `config` values into class attributes, and a per-test fixture builds the page object from `driver`.
+**Test conventions** (see `tests/ui_tests/web/toolshop/test_login.py` and `test_products.py`):
+- Class-based suites (`TestLogin`, `TestProducts`, `TestSearch`) with `test_*` methods; an
+  `autouse` fixture copies `config['configuration']['toolshop']` values into class attributes,
+  and a per-test fixture builds the page object: `url = f"{self.BASE_URL}/{Page.PAGE_URL}"`.
 - Web flakiness is handled with the module-level `retry` decorator (defined in `base_page.py`):
   `from core.pom.web.base_page import retry` → `@retry(retries=3, delay=2, on_retry=log_retry)`,
   where `log_retry(attempt, exception, *args, **kwargs)` logs each attempt.
-- Soft assertions via `pytest_check` (`import pytest_check as check; check.is_in(...)`) to collect
-  multiple failures in one run.
+- Soft assertions via `pytest_check` (`import pytest_check as check; check.is_true(...)`) to
+  collect multiple failures in one run.
+
+**API testing** (`core/api/`, `tests/api_tests/`). A thin REST client lives in
+`core/api/client.py`: `ApiClient(base_url, *, token=None, headers=None, timeout=30)` with
+`get`/`post`/`put`/`delete` methods that return `requests.Response` without raising on 4xx/5xx
+status codes — tests assert `response.status_code` themselves. The `[api]` optional extra
+(`requests>=2.34.2`) must be installed to use it: `pip install -e .[api]`. Three fixtures live in
+a **local** `tests/api_tests/conftest.py` (not a global plugin, so a web-only install never
+imports `requests`): `api_client` (unauthenticated), `auth_token` (logs in with the public demo
+account and returns a bearer token), `authed_client` (pre-authenticated `ApiClient`). Run with
+`hatch run api:run` (uses the `[tool.hatch.envs.api]` environment). The `test` environment
+already includes the `[api]` extra (`features = ["test", "tools", "api"]`). `pytest.ini` sets
+`--import-mode=importlib` so the shared `test_products.py` filename across `tests/ui_tests/web/`
+and `tests/api_tests/` does not cause a module-namespace collision.
 
 **Allure hooks** (`fixtures/allure.py`, hooks not fixtures): creates `reports/` subdirs, captures a
 screenshot on test failure and attaches it to Allure, writes `environment.properties` at session end
@@ -107,11 +126,18 @@ GitHub Pages at https://alex-wahl.github.io/Testopus. Background: `docs/ci/githu
 
 ## Repo realities (avoid these traps)
 
-- **`tests/api_tests/` does not exist yet.** The `api` Hatch env/script was removed — there is
-  nothing to execute. Re-add it (with an `[api]` extra) when API testing actually lands.
+- **`tests/api_tests/` exists and is fully wired.** The `[api]` extra (`requests`) and `hatch run
+  api:run` are live. `pip install -e .[api]` before running the API suite without Hatch.
+- **Two files share the name `test_products.py`** (`tests/ui_tests/web/toolshop/` and
+  `tests/api_tests/`). `pytest.ini` sets `--import-mode=importlib` to prevent the name collision.
+  Do not remove that flag.
 - `pytest.ini` sets `addopts = --strict-markers` and registers `feature`, `story`, `severity`, `tag`
   markers for Allure. An unregistered marker is an error. Pass `--alluredir` explicitly (or via a
   `test:*-report` script) to get Allure output — it is intentionally not in `addopts`.
+- **No GASAG_USERNAME / GASAG_PASSWORD secrets are used.** The project targets the public
+  Toolshop demo; default credentials (`customer@practicesoftwaretesting.com` / `welcome01`) are
+  in `default.yaml` via `${TOOLSHOP_EMAIL:-...}` / `${TOOLSHOP_PASSWORD:-...}` fallbacks.
+  Remove any old GASAG_* secrets from your repository settings.
 
 ---
 
@@ -165,11 +191,12 @@ may differ). This is for unfamiliar or version-sensitive calls, not every edit. 
 
 ## Safety — credentials & irreversible actions (MANDATORY)
 
-- **Never commit real secrets.** `config/yaml_configs/default.yaml` uses `${GASAG_USERNAME}` /
-  `${GASAG_PASSWORD}` placeholders; `core/config/config_loader.py` resolves them from the environment
-  via `python-dotenv` (see `.env.example`). In CI, inject them as repository secrets. `override.yaml`
-  is gitignored — never commit it. **Never echo credentials into logs, reports, or screenshots**
-  (Allure attaches failure screenshots — scrub sensitive fields).
+- **Never commit real secrets.** `config/yaml_configs/default.yaml` uses
+  `${TOOLSHOP_EMAIL:-customer@practicesoftwaretesting.com}` / `${TOOLSHOP_PASSWORD:-welcome01}`
+  — these are the **public** demo account, not secrets. `core/config/config_loader.py` resolves
+  env vars via `python-dotenv` (see `.env.example`); set them only if you want a different
+  account. `override.yaml` is gitignored — never commit it. **Never echo credentials into logs,
+  reports, or screenshots** (Allure attaches failure screenshots — scrub sensitive fields).
 - **No irreversible or outward-facing actions without explicit approval.** Tests or scripts that
   perform real account signups, password changes, payments, emails, or third-party OAuth against
   **live** sites/accounts require the owner's case-by-case go-ahead. Read-only checks and runs
@@ -199,9 +226,10 @@ may differ). This is for unfamiliar or version-sensitive calls, not every edit. 
 - **Single source of truth:** all dependencies live in `pyproject.toml` — runtime deps in
   `[project].dependencies`, dev tools in `[project.optional-dependencies].dev`, test-only extras in
   `.test`, authoring-time tooling in `.tools` (`requests`; install with `pip install -e .[tools]`),
-  future framework backends (Playwright/Appium) in `.frameworks`. Hatch envs pull these via
-  `features` (no per-env duplication). `docker/Dockerfile` installs with `pip install -e .[test,tools]` —
-  never hand-maintain a second dependency list.
+  API testing in `.api` (`requests`; install with `pip install -e .[api]`), future framework
+  backends (Playwright/Appium) in `.frameworks`. Hatch envs pull these via `features` (no per-env
+  duplication). `docker/Dockerfile` installs with `pip install -e .[test,tools,api]` — never
+  hand-maintain a second dependency list.
 - **Stay current automatically:** `.github/dependabot.yml` watches `pip` (pyproject), `github-actions`,
   and the `docker` base image weekly. Minor/patch Python bumps batch into one PR; each **major** bump
   opens its own PR for individual review. The CI test job validates every Dependabot PR.
@@ -276,3 +304,5 @@ This repo ships a Claude Code toolkit under `.claude/`:
 - **ADRs** (`.claude/adr/`): architecture decision records. ADR-0001 (`0001-driver-seam.md`) records
   the `BaseDriver`/`ElementHandle` Protocol seam and driver factory. ADR-0002
   (`0002-testiny-nl-authoring.md`) records the Testiny-driven natural-language authoring pipeline.
+  ADR-0003 (`0003-oss-demo-target-and-api-layer.md`) records the switch from the private gasag
+  target to the public Toolshop demo and the addition of the API testing layer.

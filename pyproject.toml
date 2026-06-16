@@ -61,6 +61,10 @@ test = [
 tools = [
   "requests>=2.34.2",
 ]
+# API testing layer (core/api/client.py + tests/api_tests). Install with `pip install -e .[api]`.
+api = [
+  "requests>=2.34.2",
+]
 # Future framework backends — declared but not yet wired (see core/drivers/factory.py).
 # Install with `pip install -e .[frameworks]` when implementing the Playwright/Appium seam.
 frameworks = [
@@ -103,7 +107,7 @@ lint = "ruff check core fixtures utils config tests tools"
 typecheck = "mypy core fixtures utils tools"
 
 [tool.hatch.envs.test]
-features = ["test", "tools"]
+features = ["test", "tools", "api"]
 
 [tool.hatch.envs.test.scripts]
 run = "pytest {args:tests}"
@@ -125,8 +129,13 @@ web = "pytest {args:tests/ui_tests/web}"
 # Uncomment when mobile tests are added
 # mobile = "pytest {args:tests/ui_tests/mobile}"
 
-# NOTE: the `api` env/script was removed — tests/api_tests/ does not exist yet. Re-add it
-# (with an [api] extra for requests/responses) when API testing actually lands.
+# API tests need no browser — a lightweight env over the [api] extra (requests).
+[tool.hatch.envs.api]
+features = ["api"]
+
+[tool.hatch.envs.api.scripts]
+run = "pytest {args:tests/api_tests}"
+allure-report = "pytest --alluredir=reports/allure-results {args:tests/api_tests}"
 
 # Build configuration for wheel - fixes "Unable to determine which files to ship" error
 [tool.hatch.build.targets.wheel]

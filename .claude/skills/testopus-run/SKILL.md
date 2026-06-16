@@ -15,12 +15,13 @@ Environments and scripts are managed with **Hatch** (`pyproject.toml`). Local UI
 ```bash
 hatch run test:run                 # all tests              (pytest tests)
 hatch run ui:web                   # web UI tests           (pytest tests/ui_tests/web)
+hatch run api:run                  # API tests              (pytest tests/api_tests)
 hatch run test:internal            # framework self-tests   (pytest tests/internal_tests)
-hatch run test:run -k email_field  # forward pytest args, e.g. keyword filter
+hatch run test:run -k search       # forward pytest args, e.g. keyword filter
 
 # Direct pytest (single file / single test):
-pytest tests/ui_tests/web/gasag/test_gasag.py
-pytest tests/ui_tests/web/gasag/test_gasag.py::TestGasag::test_email_field_is_accepting_email_addresses
+pytest tests/ui_tests/web/toolshop/test_login.py
+pytest tests/ui_tests/web/toolshop/test_login.py::TestLogin::test_login_with_invalid_credentials_shows_error
 ```
 
 CLI options (registered in `fixtures/cli.py`): `--override` (merge `override.yaml`), `--framework
@@ -70,4 +71,6 @@ mypy core fixtures utils
 - Report pass/fail/skipped counts and name the failures.
 - Point to the report path (`reports/allure-results/`, `reports/html/report.html`).
 - If tests are flaky or failing, hand off to the **`flaky-triage`** skill to classify and propose fixes.
-- `tests/api_tests/` does not exist yet; the `api` Hatch script was removed. Do not attempt `hatch run api:run`.
+- `tests/api_tests/` exists and is fully wired. `hatch run api:run` uses the `[tool.hatch.envs.api]`
+  env (features `["api"]`). For a web-only install `pip install -e .` (no extras) is sufficient —
+  API tests require `pip install -e .[api]` or the `api` Hatch env.

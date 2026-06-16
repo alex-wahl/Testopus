@@ -6,10 +6,13 @@
 
 **Testopus** is a Pytest-based UI test automation framework: Selenium drives Chrome through a Page
 Object Model, with Allure reporting and a CI pipeline that publishes trend reports to GitHub Pages.
+Both web UI tests and REST API tests run against the public **Practice Software Testing "Toolshop"**
+demo (https://practicesoftwaretesting.com) — no credentials required for browsing; the login examples
+use a freely available public demo account.
 
-> **Status: prototype.** Web UI testing (Selenium/Chrome) works today. Playwright, Appium/mobile, API
-> testing, and AI integrations are on the roadmap — declared in dependencies and config but **not yet
-> implemented**.
+> **Status: prototype.** Web UI testing (Selenium/Chrome) and API testing are implemented today.
+> Playwright, Appium/mobile, and AI integrations are on the roadmap — declared in dependencies and
+> config but **not yet implemented**.
 
 ## Quick Start (< 5 min)
 
@@ -22,11 +25,13 @@ cd Testopus
 pip install hatch                 # Hatch manages the virtualenv + dependencies for you
 
 hatch run test:internal           # ✓ no browser — confirms your setup works
+hatch run api:run                 # REST API tests (no browser needed)
 hatch run ui:web                  # web UI tests (Selenium + Chrome)
 ```
 
-`hatch run test:internal` is the fastest "did it work?" check: framework self-tests, no browser. Once
-it's green your setup is good, and `hatch run ui:web` runs the actual web tests.
+`hatch run test:internal` is the fastest "did it work?" check: framework self-tests, no browser.
+`hatch run api:run` exercises the Toolshop REST API — also no browser needed. Once both are green
+your setup is good, and `hatch run ui:web` runs the actual web tests.
 
 **No local Chrome? Use Docker** (bundles headless Chromium + chromedriver, runs the whole suite):
 
@@ -42,16 +47,18 @@ Hatch scripts (defined in `pyproject.toml`); anything after the script name is f
 | Command | Runs |
 |---|---|
 | `hatch run test:internal` | Framework self-tests (no browser) |
+| `hatch run api:run` | API tests — `tests/api_tests` (no browser) |
 | `hatch run ui:web` | Web UI tests — `tests/ui_tests/web` |
 | `hatch run test:run` | Everything — `tests/` |
-| `hatch run test:run -k email_field` | Forward pytest args, e.g. a keyword filter |
+| `hatch run test:run -k search` | Forward pytest args, e.g. a keyword filter |
 
-Not using Hatch? `python -m venv .venv && source .venv/bin/activate && pip install -e .`, then call
-`pytest` directly (`pytest.ini` sets `pythonpath=.`):
+Not using Hatch? `python -m venv .venv && source .venv/bin/activate && pip install -e .[api]`, then
+call `pytest` directly (`pytest.ini` sets `pythonpath=.`):
 
 ```bash
 pytest tests/internal_tests
-pytest tests/ui_tests/web/gasag/test_gasag.py
+pytest tests/api_tests
+pytest tests/ui_tests/web/toolshop/test_login.py
 ```
 
 Inside Docker, pass a **path** (the container entrypoint is already `pytest`):
@@ -76,11 +83,12 @@ is published to **<https://alex-wahl.github.io/Testopus>**. CI/pipeline details:
 ## Configuration
 
 Config lives in `config/yaml_configs/default.yaml`; tests read nested keys, e.g.
-`config['configuration']['gasag']['web_url']`. Pass `--override` to merge an `override.yaml` on top of
-the defaults. Credentials (`GASAG_USERNAME` / `GASAG_PASSWORD`) are read from the environment — copy
-`.env.example` to `.env` and fill in values locally; in CI, set them as repository secrets. The
-`--framework selenium|playwright|appium` flag is wired — `playwright`/`appium` fail loudly until
-their backends are built. The `--ai` flag is reserved but not yet active.
+`config['configuration']['toolshop']['web_url']`. Pass `--override` to merge an `override.yaml`
+on top of the defaults. The Toolshop target uses a **public demo account**
+(`customer@practicesoftwaretesting.com` / `welcome01`), defaulted in the YAML via
+`${TOOLSHOP_EMAIL:-...}` / `${TOOLSHOP_PASSWORD:-...}` — no repository secrets are needed to run
+the suite. The `--framework selenium|playwright|appium` flag is wired — `playwright`/`appium` fail
+loudly until their backends are built. The `--ai` flag is reserved but not yet active.
 
 > ⚠️ Never commit `.env` or real credentials. `override.yaml` is gitignored for the same reason.
 > Allure attaches failure screenshots — sensitive fields are scrubbed before capture.
@@ -88,10 +96,10 @@ their backends are built. The `--ai` flag is reserved but not yet active.
 ## Project layout
 
 ```
-core/      # config loader · driver seam (core/drivers/) · Page Object Model (core/pom/web)
+core/      # config loader · driver seam (core/drivers/) · POM (core/pom/web) · API client (core/api/)
 fixtures/  # pytest plugins: cli, setup (driver factory), allure
-config/    # YAML configs (config/yaml_configs/default.yaml); credentials via env vars
-tests/     # ui_tests/web (Selenium) · internal_tests (framework self-tests)
+config/    # YAML configs (config/yaml_configs/default.yaml); public demo account via env fallbacks
+tests/     # ui_tests/web (Selenium) · api_tests (REST) · internal_tests (framework self-tests)
 utils/     # path helpers, redact, CI env
 ci/        # CI pipeline scripts + templates (ci/scripts)
 docs/      # project documentation (docs/ci/ — CI workflow & Allure customization)
@@ -107,8 +115,26 @@ hatch run typecheck   # MyPy
 ```
 
 Conventions for writing page objects and tests — POM locators, the `@retry` decorator for genuinely
-flaky web steps, `pytest_check` soft assertions — live in [`CLAUDE.md`](CLAUDE.md);
-`tests/ui_tests/web/gasag/test_gasag.py` is a worked example.
+flaky web steps, `pytest_check` soft assertions — live in [`CLAUDE.md`](CLAUDE.md). Reference
+suites: `tests/ui_tests/web/toolshop/test_login.py` (web) and `tests/api_tests/test_auth.py`
+(API).
+
+### Web + API examples (Toolshop)
+
+The Toolshop suite covers both layers:
+
+- **Web** (`tests/ui_tests/web/toolshop/`): `TestProducts` (product listing), `TestSearch`
+  (search submit/reset), `TestLogin` (invalid credentials error, valid login redirect). Pages live
+  in `core/pom/web/toolshop/`: `HomePage` (`search(term)`) and `LoginPage` (`login(email, password)`).
+  All locators use stable `data-test` hooks.
+- **API** (`tests/api_tests/`): `test_products.py` (list/filter), `test_categories.py` (listing),
+  `test_auth.py` (login/token). Fixtures (`api_client`, `auth_token`, `authed_client`) live in
+  `tests/api_tests/conftest.py` (local, not a global plugin).
+
+```bash
+hatch run ui:web              # all Toolshop web suites
+hatch run api:run             # all Toolshop API suites
+```
 
 ### Generate tests from Testiny (experimental)
 
@@ -120,7 +146,7 @@ then turned into committed pytest suites via Claude Code. The tool requires the 
 pip install -e .[tools]
 # Set TESTINY_API_KEY in .env (copy .env.example)
 
-python -m tools.testiny pull --case-id 1          # writes specs/gasag/tc-1-login.md
+python -m tools.testiny pull --case-id 1          # writes specs/toolshop/tc-1-login.md
 # Then invoke the testopus-nl-test skill to generate the pytest suite,
 # followed by the mandatory code-reviewer + testopus-run gate before committing.
 ```

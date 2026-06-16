@@ -1,9 +1,12 @@
+# Public test targets — no secrets required. The Practice Software Testing "Toolshop"
+# demo (https://practicesoftwaretesting.com) drives both the web and the API examples.
 configuration:
-  gasag: 
-    web_url: https://www.gasag.de
-    # Credentials come from the environment (or a local .env), never committed.
-    # Set GASAG_USERNAME / GASAG_PASSWORD (see .env.example or CI secrets).
-    username: ${GASAG_USERNAME}
-    password: ${GASAG_PASSWORD}
-
-#https://www.gasag.de/onlineservice/login
+  toolshop:
+    # Web UI under test (public demo shop; browsing needs no credentials).
+    web_url: https://practicesoftwaretesting.com
+    # Public Toolshop REST API (Swagger UI at /api/documentation).
+    api_url: https://api.practicesoftwaretesting.com
+    # Public demo account used by the login examples. These are NOT secrets; override
+    # via the environment (or a local .env) only if you want a different account.
+    email: ${TOOLSHOP_EMAIL:-customer@practicesoftwaretesting.com}
+    password: ${TOOLSHOP_PASSWORD:-welcome01}

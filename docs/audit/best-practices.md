@@ -13,6 +13,9 @@
 > `anthropic` client + model tiering, eval sets, perceptual diff) remain **roadmap** — not yet built
 > because no AI/ML feature exists to attach them to; see [roadmap.md](roadmap.md). The live gasag UI
 > suite was NOT run (requires a real browser + live site; must pass in CI before merge).
+>
+> **Historical note:** The gasag suite was later replaced by the public Toolshop demo target (and
+> an API layer added). See ADR-0003.
 
 Industry and framework best practices that fit Testopus, each with the **current gap** (`file:line` where
 relevant), **how to adopt** it, and a **reference** to the official source (verified docs-first). These are

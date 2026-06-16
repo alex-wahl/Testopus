@@ -24,7 +24,7 @@ testopus-nl-test skill  →  tests/ui_tests/web/<app>/test_<name>.py
 code-reviewer (Opus 4.8, effort max)  +  human review
         |
         v
-testopus-run skill  (pytest --collect-only, then hatch run ui:web)
+testopus-run skill  (pytest --collect-only, then hatch run ui:web or hatch run api:run)
         |
         v
 commit
@@ -118,10 +118,10 @@ python -m tools.testiny pull --case-id 1,2,7
 # Pull an entire folder (scoped to project 42)
 python -m tools.testiny pull --folder 9 --project-id 42
 
-# Pull with a custom filter; fall back to gasag/login when custom fields are absent
+# Pull with a custom filter; fall back to toolshop/login when custom fields are absent
 python -m tools.testiny pull \
     --query '{"priority": {"op": "eq", "value": "high"}}' \
-    --default-app gasag --default-page login
+    --default-app toolshop --default-page login
 
 # Use non-default custom field keys
 python -m tools.testiny pull \
@@ -154,7 +154,7 @@ testiny_id: 1
 testiny_etag: 'W/"abc123"'
 project_id: 42
 title: Login rejects invalid credentials
-app: gasag
+app: toolshop
 page: login
 priority: high
 severity: critical
@@ -167,7 +167,7 @@ pulled_at: 2026-06-16T10:30:00Z
 
 ## Precondition
 
-The user is on the GASAG online-service login page (`LoginPage`).
+The user is on the Toolshop login page (`LoginPage`, path `auth/login`).
 
 ## Steps
 
@@ -176,8 +176,8 @@ The user is on the GASAG online-service login page (`LoginPage`).
 
 ## Expected Result
 
-An authentication error is shown (the "no matching login" key phrase) and the user remains
-on the login page.
+An authentication error message containing "Invalid email or password" is shown
+(`LoginPage.TEXT_LOGIN_ERROR_KEY_PHRASE`) and the user remains on the login page.
 ```
 
 ### Front-matter field mapping
@@ -232,7 +232,7 @@ Only `template: "TEXT"` cases are supported. Step-table templates are out of sco
 With a reviewed spec in place, invoke the **`testopus-nl-test`** skill:
 
 ```
-/testopus-nl-test specs/gasag/tc-1-login.md
+/testopus-nl-test specs/toolshop/tc-1-login.md
 ```
 
 The skill:

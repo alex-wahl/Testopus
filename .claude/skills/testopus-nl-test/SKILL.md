@@ -8,8 +8,8 @@ version: 0.1.0
 
 Turn a `specs/<app>/tc-*.md` spec (a test case described in human language, usually pulled
 from Testiny with `python -m tools.testiny pull …`) into a class-based pytest suite under
-`tests/ui_tests/web/<app>/`. The reference suite is `tests/ui_tests/web/gasag/test_gasag.py`;
-the reference grounding source is `core/pom/web/gasag/login_page.py`.
+`tests/ui_tests/web/<app>/`. The reference suite is `tests/ui_tests/web/toolshop/test_login.py`;
+the reference grounding source is `core/pom/web/toolshop/login_page.py`.
 
 **The model is in the *authoring* loop only.** The output is plain, committed pytest that runs
 deterministically forever (Selenium drives the browser, not an LLM). This matches the Testopus
@@ -22,7 +22,7 @@ SDK, and does **not** execute anything agentically at test time.
 1. A spec file `specs/<app>/tc-<id>-*.md` — YAML front-matter (`testiny_id`, `app`, `page`,
    `severity`, …) + a human-language body (`## Precondition`, `## Steps`, `## Expected Result`).
 2. The Page Object it grounds on: `core/pom/web/<app>/<page>_page.py`, resolved from the
-   `app` + `page` front-matter (e.g. `app: gasag`, `page: login` → `LoginPage`).
+   `app` + `page` front-matter (e.g. `app: toolshop`, `page: login` → `LoginPage`).
 
 ## Grounding discipline (the core rule — do this first)
 
@@ -69,11 +69,11 @@ traceable to its spec and Testiny case:
 
 ```python
 class TestLoginInvalidCredentials:
-    """Generated from Testiny case 1 (spec: specs/gasag/tc-1-login.md).
+    """Generated from Testiny case 1 (spec: specs/toolshop/tc-1-login.md).
     Regenerate via `python -m tools.testiny pull` + the testopus-nl-test skill."""
 ```
 
-## Generated shape (mirrors `tests/ui_tests/web/gasag/test_gasag.py`)
+## Generated shape (mirrors `tests/ui_tests/web/toolshop/test_login.py`)
 
 ```python
 import logging
@@ -81,31 +81,31 @@ import logging
 import pytest
 
 from core.pom.web.base_page import retry
-from core.pom.web.gasag.login_page import LoginPage
+from core.pom.web.toolshop.login_page import LoginPage
 
 
 def log_retry(attempt, exception, *args, **kwargs):
     logging.warning(f"Retry attempt {attempt + 1} due to: {str(exception)}")
 
 
-@pytest.mark.feature("GASAG Login")
+@pytest.mark.feature("Toolshop Account")
 class TestLoginInvalidCredentials:
-    """Generated from Testiny case 1 (spec: specs/gasag/tc-1-login.md)."""
+    """Generated from Testiny case 1 (spec: specs/toolshop/tc-1-login.md)."""
 
     BASE_URL = None
-    USERNAME = None
+    EMAIL = None
     PASSWORD = None
 
     @pytest.fixture(autouse=True)
     def setup_test_suite(self, config):
         if TestLoginInvalidCredentials.BASE_URL is None:
-            self.BASE_URL = config["configuration"]["gasag"]["web_url"]
-            self.USERNAME = config["configuration"]["gasag"]["username"]
-            self.PASSWORD = config["configuration"]["gasag"]["password"]
+            self.BASE_URL = config["configuration"]["toolshop"]["web_url"]
+            self.EMAIL = config["configuration"]["toolshop"]["email"]
+            self.PASSWORD = config["configuration"]["toolshop"]["password"]
 
     @pytest.fixture
     def login_page(self, driver):
-        url = f"{self.BASE_URL}/{LoginPage.LOGIN_PAGE_URL}"
+        url = f"{self.BASE_URL}/{LoginPage.PAGE_URL}"
         return LoginPage(driver, url=url)
 
     @pytest.mark.severity("critical")
@@ -113,10 +113,10 @@ class TestLoginInvalidCredentials:
     @retry(retries=3, delay=2, on_retry=log_retry)
     def test_login_rejects_invalid_credentials(self, login_page):
         # Steps: enter non-matching credentials and submit (LoginPage.login exists).
-        login_page.login(self.USERNAME, self.PASSWORD)
-        # Expected Result: the "no matching login" key phrase appears (real TEXT_* constant).
+        login_page.login("nobody@example.com", "wrong-password")
+        # Expected Result: the error key phrase appears (real TEXT_* constant).
         assert login_page.wait_for_text_present(
-            LoginPage.ERROR_MESSAGE, LoginPage.TEXT_ERROR_KEY_PHRASE
+            LoginPage.LOGIN_ERROR, LoginPage.TEXT_LOGIN_ERROR_KEY_PHRASE
         )
 ```
 
@@ -132,7 +132,9 @@ class TestLoginInvalidCredentials:
    the **`code-reviewer`** agent (Opus 4.8, effort `max`) → human review → run it with the
    **`testopus-run`** skill (`pytest --collect-only` first to catch marker/import errors cheaply,
    then `hatch run ui:web`). The run/review gate is what makes grounding enforceable — a fabricated
-   `LoginPage.<X>` fails collection.
+   `LoginPage.<X>` fails collection. Note: `pytest.ini` sets `--import-mode=importlib`, which is
+   required because both `tests/ui_tests/web/toolshop/` and `tests/api_tests/` contain a file
+   named `test_products.py`; do not remove that flag.
 
 ## Out of scope (future follow-ups)
 

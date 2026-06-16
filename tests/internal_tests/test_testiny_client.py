@@ -78,7 +78,7 @@ def test_cli_pull_writes_spec_and_masks_key(mocker, tmp_path, monkeypatch, caplo
                 "--case-id",
                 "123",
                 "--default-app",
-                "gasag",
+                "toolshop",
                 "--default-page",
                 "login",
                 "--out",
@@ -90,7 +90,7 @@ def test_cli_pull_writes_spec_and_masks_key(mocker, tmp_path, monkeypatch, caplo
     specs = list(tmp_path.rglob("*.md"))
     assert len(specs) == 1
     content = specs[0].read_text(encoding="utf-8")
-    assert "app: gasag" in content
+    assert "app: toolshop" in content
     assert "severity: critical" in content
     # The key must never reach the logs; the masked marker proves redaction ran.
     assert API_KEY not in caplog.text
