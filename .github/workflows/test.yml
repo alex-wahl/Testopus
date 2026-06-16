@@ -121,9 +121,10 @@ jobs:
           elif [ "${{ github.event.inputs.test_suite }}" = "api" ]; then
             docker compose -f docker/docker-compose.yml run --rm testopus --verbose -vv --alluredir=/app/reports/allure-results --html=/app/reports/html/report.html --junitxml=/app/reports/junit/report_api.xml /app/tests/api_tests ${{ github.event.inputs.custom_flags }}
           else
-            # "all" runs every suite in one container so they share one Allure report:
-            # web (headless Chromium) + internal self-tests + API (HTTP, no browser).
-            docker compose -f docker/docker-compose.yml run --rm testopus --verbose -vv --alluredir=/app/reports/allure-results --html=/app/reports/html/report.html --junitxml=/app/reports/junit/report_all.xml /app/tests ${{ github.event.inputs.custom_flags }}
+            # Default push/PR run: deterministic suites only (internal self-tests + API).
+            # The live web UI tests run in the separate `web-e2e` job against a self-hosted
+            # Toolshop, because the public site blocks CI datacenter IPs.
+            docker compose -f docker/docker-compose.yml run --rm testopus --verbose -vv --alluredir=/app/reports/allure-results --html=/app/reports/html/report.html --junitxml=/app/reports/junit/report_all.xml /app/tests/internal_tests /app/tests/api_tests ${{ github.event.inputs.custom_flags }}
           fi
         env:
           DEBUG_MODE: ${{ github.event.inputs.debug_mode == 'true' }}
@@ -309,3 +310,81 @@ jobs:
           hatch run typecheck
       - name: Collect tests (plugin/compat smoke)
         run: hatch run test:run --collect-only
+
+  # Web UI tests against a SELF-HOSTED Toolshop. The public site blocks CI datacenter IPs,
+  # so we boot the official Toolshop images, seed the DB, and run the Selenium suite natively
+  # on the runner (which ships Chrome). Advisory for now — drop continue-on-error once green.
+  web-e2e:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    env:
+      SPRINT: sprint5
+      DISABLE_LOGGING: "true"
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Fetch Toolshop compose 📥
+        run: |
+          curl -fsSL -o toolshop-compose.yml \
+            https://raw.githubusercontent.com/testsmith-io/practice-software-testing/main/docker-compose.prod.yml
+
+      - name: Start Toolshop 🐳
+        run: docker compose -f toolshop-compose.yml up -d --pull always --quiet-pull
+
+      - name: Wait for MariaDB 🗄️
+        run: |
+          for i in $(seq 1 30); do
+            if docker compose -f toolshop-compose.yml exec -T mariadb \
+                 mysqladmin ping -h localhost -u root -proot --silent 2>/dev/null; then
+              echo "MariaDB ready"; exit 0
+            fi
+            echo "db attempt $i/30 — waiting 2s"; sleep 2
+          done
+          echo "MariaDB never came up"; docker compose -f toolshop-compose.yml logs mariadb; exit 1
+
+      - name: Seed database 🌱
+        run: docker compose -f toolshop-compose.yml exec -T laravel-api php artisan migrate:fresh --seed
+
+      - name: Wait for API + UI 🕐
+        run: |
+          for i in $(seq 1 30); do
+            curl -sf http://localhost:8091/status >/dev/null && { echo "API ready"; break; }
+            echo "api attempt $i/30"; sleep 3
+          done
+          for i in $(seq 1 60); do
+            if [ "$(curl -s -o /dev/null -w '%{http_code}' http://localhost:4200)" = "200" ]; then
+              echo "UI ready"; break
+            fi
+            echo "ui attempt $i/60 — waiting 5s"; sleep 5
+          done
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+
+      - name: Install project
+        run: pip install -e ".[test,tools,api]"
+
+      - name: Run web UI tests 🧪
+        env:
+          TOOLSHOP_WEB_URL: http://localhost:4200
+          TOOLSHOP_API_URL: http://localhost:8091
+          DOCKER_ENV: "true"
+          PYTHONPATH: .
+          TZ: Europe/Berlin
+        run: |
+          mkdir -p reports/junit
+          pytest tests/ui_tests/web -vv --junitxml=reports/junit/report_web.xml
+
+      - name: Toolshop logs (on failure) 🔍
+        if: failure()
+        run: docker compose -f toolshop-compose.yml logs --tail=150
+
+      - name: Upload web reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-e2e-reports
+          path: reports/junit/
+          retention-days: 30

@@ -2,10 +2,11 @@
 # demo (https://practicesoftwaretesting.com) drives both the web and the API examples.
 configuration:
   toolshop:
-    # Web UI under test (public demo shop; browsing needs no credentials).
-    web_url: https://practicesoftwaretesting.com
-    # Public Toolshop REST API (Swagger UI at /api/documentation).
-    api_url: https://api.practicesoftwaretesting.com
+    # Web UI under test (public demo shop; browsing needs no credentials). Override via
+    # TOOLSHOP_WEB_URL — the CI web-e2e job points it at a self-hosted Toolshop on localhost.
+    web_url: ${TOOLSHOP_WEB_URL:-https://practicesoftwaretesting.com}
+    # Public Toolshop REST API (Swagger UI at /api/documentation). Override via TOOLSHOP_API_URL.
+    api_url: ${TOOLSHOP_API_URL:-https://api.practicesoftwaretesting.com}
     # Public demo account used by the login examples. These are NOT secrets; override
     # via the environment (or a local .env) only if you want a different account.
     email: ${TOOLSHOP_EMAIL:-customer@practicesoftwaretesting.com}
