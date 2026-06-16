@@ -38,8 +38,9 @@ COPY utils ./utils
 COPY config ./config
 COPY tests ./tests
 
-# Install the project plus its "test" extra straight from pyproject.toml.
-RUN pip install --no-cache-dir -e ".[test]"
+# Install the project plus its "test" and "tools" extras straight from pyproject.toml
+# (tools carries `requests`, which the internal tests' Testiny client imports).
+RUN pip install --no-cache-dir -e ".[test,tools]"
 
 # Copy the rest of the code
 COPY . .

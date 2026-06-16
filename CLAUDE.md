@@ -198,8 +198,9 @@ may differ). This is for unfamiliar or version-sensitive calls, not every edit. 
 
 - **Single source of truth:** all dependencies live in `pyproject.toml` — runtime deps in
   `[project].dependencies`, dev tools in `[project.optional-dependencies].dev`, test-only extras in
-  `.test`, future framework backends (Playwright/Appium) in `.frameworks`. Hatch envs pull these via
-  `features` (no per-env duplication). `docker/Dockerfile` installs with `pip install -e .[test]` —
+  `.test`, authoring-time tooling in `.tools` (`requests`; install with `pip install -e .[tools]`),
+  future framework backends (Playwright/Appium) in `.frameworks`. Hatch envs pull these via
+  `features` (no per-env duplication). `docker/Dockerfile` installs with `pip install -e .[test,tools]` —
   never hand-maintain a second dependency list.
 - **Stay current automatically:** `.github/dependabot.yml` watches `pip` (pyproject), `github-actions`,
   and the `docker` base image weekly. Minor/patch Python bumps batch into one PR; each **major** bump
@@ -232,6 +233,28 @@ may differ). This is for unfamiliar or version-sensitive calls, not every edit. 
   by `tests/internal_tests/test_layering.py`, which AST-scans every module under `core/` and fails
   if it imports `core.ai`, `core.ml`, `core.telemetry`, `core.data`, or `anthropic`.
 
+## Test authoring from Testiny
+
+`tools/testiny` + `specs/` + the `testopus-nl-test` skill form an authoring-time pipeline for
+turning human-language Testiny cases into committed Pytest suites.
+
+**Flow:** `python -m tools.testiny pull --case-id N` fetches cases from the Testiny REST API and
+writes `specs/<app>/tc-<id>-<slug>.md` (Markdown + YAML front-matter). The `testopus-nl-test`
+skill then reads the spec and the referenced Page Object, grounds every locator/method/`TEXT_*`
+constant on real code, and generates a class-based pytest suite. The output goes through the
+standard `code-reviewer` + `testopus-run` gate before commit.
+
+**Key constraints:**
+
+- `tools/` is **authoring-time tooling** — it is outside `core/`, not included in the wheel
+  (`packages` in `pyproject.toml`), and not scanned by `test_layering.py`. The `[tools]` extra
+  (`requests>=2.34.2`) must be installed explicitly: `pip install -e .[tools]`. The `test` Hatch
+  env already includes it.
+- `TESTINY_API_KEY` is read from the environment or a local `.env` (see `.env.example`); it is
+  never logged (masked by `utils.redact.redact_mapping`). Never commit the key.
+- The LLM is in the **authoring loop only** — the committed test runs deterministically with no
+  AI dependency. See `docs/testiny/workflow.md` and `.claude/adr/0002-testiny-nl-authoring.md`.
+
 ## `.claude/` team & tooling
 
 This repo ships a Claude Code toolkit under `.claude/`:
@@ -249,6 +272,7 @@ This repo ships a Claude Code toolkit under `.claude/`:
   antipatterns (+ action items), an improvement/feature roadmap, and best-practices adoption —
   writing three docs to `docs/audit/`. Same agent-teams/fan-out mode detection as `/team-council`.
 - **Skills** (`.claude/skills/`): `testopus-page-object`, `testopus-web-test`, `testopus-run`,
-  `flaky-triage`, `docs-first`.
+  `flaky-triage`, `docs-first`, `testopus-nl-test`.
 - **ADRs** (`.claude/adr/`): architecture decision records. ADR-0001 (`0001-driver-seam.md`) records
-  the `BaseDriver`/`ElementHandle` Protocol seam and driver factory.
+  the `BaseDriver`/`ElementHandle` Protocol seam and driver factory. ADR-0002
+  (`0002-testiny-nl-authoring.md`) records the Testiny-driven natural-language authoring pipeline.

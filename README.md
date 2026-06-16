@@ -110,6 +110,24 @@ Conventions for writing page objects and tests — POM locators, the `@retry` de
 flaky web steps, `pytest_check` soft assertions — live in [`CLAUDE.md`](CLAUDE.md);
 `tests/ui_tests/web/gasag/test_gasag.py` is a worked example.
 
+### Generate tests from Testiny (experimental)
+
+Test cases written in [Testiny](https://app.testiny.io) can be pulled into local spec files and
+then turned into committed pytest suites via Claude Code. The tool requires the `[tools]` extra
+(`requests`):
+
+```bash
+pip install -e .[tools]
+# Set TESTINY_API_KEY in .env (copy .env.example)
+
+python -m tools.testiny pull --case-id 1          # writes specs/gasag/tc-1-login.md
+# Then invoke the testopus-nl-test skill to generate the pytest suite,
+# followed by the mandatory code-reviewer + testopus-run gate before committing.
+```
+
+The LLM is in the authoring loop only — the committed output is plain Pytest with no AI dependency
+at runtime. See [`docs/testiny/workflow.md`](docs/testiny/workflow.md) for the full end-to-end guide.
+
 ## Troubleshooting
 
 - **ChromeDriver / Chrome mismatch** — match their versions, or set `CHROMEDRIVER_PATH`. (Docker avoids
