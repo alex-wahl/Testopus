@@ -3,6 +3,9 @@ services:
     # Use the image we just built with docker/build-push-action
     image: testopus:latest
     container_name: testopus
+    # Run as the host UID/GID so files written into the bind-mounted /app/reports are owned
+    # by the caller (CI exports TESTOPUS_UID/TESTOPUS_GID); avoids the chmod -R 777 workaround.
+    user: "${TESTOPUS_UID:-1000}:${TESTOPUS_GID:-1000}"
     volumes:
       - ..:/app:delegated
     environment:

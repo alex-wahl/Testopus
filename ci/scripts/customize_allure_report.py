@@ -41,6 +41,10 @@ from pathlib import Path
 from typing import Optional, List, Dict, Any, Union
 import shutil
 
+# Make the project root importable so this standalone CI script can reuse shared helpers.
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
+from utils.ci_env import resolve_branch  # noqa: E402
+
 # Set up logging
 logging.basicConfig(
     level=logging.INFO,
@@ -94,22 +98,10 @@ def get_branch_name() -> str:
         logger.info(f"Using branch name from ALLURE_BRANCH: {branch}")
         return branch
 
-    # Try multiple approaches to get the branch name
-    # 1. GitHub Actions environment variables
-    branch = os.environ.get('GITHUB_HEAD_REF', '')  # For pull requests
-    if not branch:
-        ref = os.environ.get('GITHUB_REF', '')      # For direct pushes
-        if ref.startswith('refs/heads/'):
-            branch = ref.replace('refs/heads/', '')
-    
-    # 2. Try git command
-    if not branch:
-        try:
-            # Try to get from git command as fallback
-            branch = subprocess.check_output(['git', 'rev-parse', '--abbrev-ref', 'HEAD'], 
-                                           stderr=subprocess.DEVNULL).decode('utf-8').strip()
-        except (subprocess.SubprocessError, FileNotFoundError):
-            logger.warning("Failed to get branch name from git command")
+    # 1. Shared GitHub Actions + git resolution (deduplicated; see utils/ci_env.py)
+    branch = resolve_branch()
+    if branch == "unknown":
+        branch = ""
     
     # 3. Look for .git/HEAD file
     if not branch:
@@ -609,27 +601,41 @@ def fix_json_timestamps(report_dir: str) -> None:
         report_dir: Path to the Allure report directory.
     """
     json_files = glob.glob(os.path.join(report_dir, "**", "*.json"), recursive=True)
+    # Keep ISO-8601 intact in machine-readable trend/history/widget data so telemetry
+    # consumers can still sort by timestamp (extract from raw allure-results, never here).
+    skip_dir_markers = (os.sep + "history" + os.sep, os.sep + "widgets" + os.sep)
+    skip_names = (
+        "history.json",
+        "history-trend.json",
+        "duration-trend.json",
+        "retry-trend.json",
+        "categories-trend.json",
+    )
     fixed_count = 0
-    
+
     for json_file in json_files:
+        if any(marker in json_file for marker in skip_dir_markers) or (
+            os.path.basename(json_file) in skip_names
+        ):
+            continue
         try:
             with open(json_file, 'r', encoding='utf-8') as f:
                 content = f.read()
-            
-            # Fix ISO timestamps to DD-MM-YYYY HH:MM:SS
-            pattern = r'(\d{4}).(\d{2}).(\d{2})T(\d{2}):(\d{2}):(\d{2})'
+
+            # Fix ISO timestamps to DD-MM-YYYY HH:MM:SS (literal ISO separators only)
+            pattern = r'(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})'
             replacement = r'\3-\2-\1 \4:\5:\6'
-            
+
             new_content = re.sub(pattern, replacement, content)
-            
+
             if new_content != content:
                 with open(json_file, 'w', encoding='utf-8') as f:
                     f.write(new_content)
                 fixed_count += 1
         except Exception as e:
             logger.warning(f"Error fixing JSON timestamp in {json_file}: {e}")
-    
-    logger.info(f"Fixed timestamps in {fixed_count} JSON files")
+
+    logger.info(f"Fixed timestamps in {fixed_count} JSON files (history/widgets skipped)")
 
 
 def add_cache_control(report_dir: str) -> None:
