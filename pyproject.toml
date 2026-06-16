@@ -53,8 +53,13 @@ dev = [
 # Test-only extras on top of the core test deps above.
 test = [
   "pytest-cov>=7.1.0",
-  "requests>=2.34.2",
   "Faker>=40.23.0",
+]
+# Authoring-time tooling deps (the `tools/` package — e.g. `python -m tools.testiny`).
+# Not part of the runtime test path; install with `pip install -e .[tools]`. The test
+# Hatch env pulls this too, because the tool's tests import its `requests`-based client.
+tools = [
+  "requests>=2.34.2",
 ]
 # Future framework backends — declared but not yet wired (see core/drivers/factory.py).
 # Install with `pip install -e .[frameworks]` when implementing the Playwright/Appium seam.
@@ -93,12 +98,12 @@ ignore_missing_imports = true
 features = ["dev"]
 
 [tool.hatch.envs.default.scripts]
-format = "black core fixtures utils config tests"
-lint = "ruff check core fixtures utils config tests"
-typecheck = "mypy core fixtures utils"
+format = "black core fixtures utils config tests tools"
+lint = "ruff check core fixtures utils config tests tools"
+typecheck = "mypy core fixtures utils tools"
 
 [tool.hatch.envs.test]
-features = ["test"]
+features = ["test", "tools"]
 
 [tool.hatch.envs.test.scripts]
 run = "pytest {args:tests}"
