@@ -1,6 +1,4 @@
 from selenium.webdriver.common.by import By
-from selenium.webdriver.support import expected_conditions as EC
-from selenium.webdriver.support.ui import WebDriverWait
 
 from core.pom.web.base_page import BasePage
 
@@ -12,7 +10,8 @@ class LoginPage(BasePage):
     LOGIN_PAGE_URL = "onlineservice/login"
 
     # Texts
-    TEXT_ERROR_MESSAGE = "Wir konnten zu Ihrer E-Mail-Adresse keine passende Anmeldung finden. Sie sind Geschäftskunde, dann geht es hier zum Energieportal."
+    # Assert a stable key phrase, not the full localized sentence (copy churns on edits).
+    TEXT_ERROR_KEY_PHRASE = "keine passende Anmeldung"
     TEXT_INTRO = "Bitte melden Sie sich an."
     TEXT_JETZT_REGISTRIEREN = "Jetzt registrieren"
     TEXT_PASSWORT_VERGESSEN = "Kennwort vergessen?"
@@ -25,12 +24,12 @@ class LoginPage(BasePage):
     TEXT_GOOGLE_KEY_PHRASES = [
         "Sie können sich, wie in unseren Datenschutzhinweisen beschrieben",
         "in ein Google-Konto einloggen",
-        "Daten ggf. in die USA und andere Drittstaaten übermittelt"
+        "Daten ggf. in die USA und andere Drittstaaten übermittelt",
     ]
     TEXT_APPLE_KEY_PHRASES = [
         "Sie können sich, wie in unseren Datenschutzhinweisen beschrieben",
         "in ein Apple-Konto einloggen",
-        "Daten ggf. in die USA und andere Drittstaaten übermittelt"
+        "Daten ggf. in die USA und andere Drittstaaten übermittelt",
     ]
 
     # Locators
@@ -46,10 +45,11 @@ class LoginPage(BasePage):
     APPLE_LOGIN = (By.ID, "dummyAppleBtn")
     GOOGLE_CONTINUE_BUTTON = (By.ID, "continueGoogleBtn")
     APPLE_CONTINUE_BUTTON = (By.ID, "continueAppleBtn")
-    GOOGLE_LOGIN_TEXT = (By.CLASS_NAME, "social__legal-section__show")
-    APPLE_LOGIN_TEXT = (By.CLASS_NAME, "social__legal-section__show d-hide")
-    APPLE_LOGIN_TEXT_2 = (By.CLASS_NAME, "social__legal-section__show")
 
+    # CSS for the social-login buttons; the legal text is read relative to them
+    # (see get_social_legal_text). Kept as page-class constants — never inlined in tests.
+    GOOGLE_SOCIAL_BUTTON_CSS = "button.google-btn.social-btn"
+    APPLE_SOCIAL_BUTTON_CSS = "button.apple-btn.social-btn"
 
     def login(self, username: str, password: str):
         self.wait_for_element_visible(self.LOGIN_FORM)
@@ -57,3 +57,23 @@ class LoginPage(BasePage):
         self.fill_text(self.PASSWORD_FIELD, password)
         self.click(self.ANMELDEN_BUTTON)
         self.wait_until_page_is_fully_loaded()
+
+    def get_social_legal_text(self, button_css: str) -> str:
+        """Return the legal-text label rendered next to a social-login button.
+
+        The selector is a page-class constant (never inlined in a test) and is passed
+        to the script as a bound argument rather than string-interpolated.
+
+        Args:
+            button_css (str): A social-button CSS constant (e.g. GOOGLE_SOCIAL_BUTTON_CSS).
+
+        Returns:
+            str: The label text, or "" if the button/label is absent.
+        """
+        script = (
+            "const btn = document.querySelector(arguments[0]);"
+            "if (!btn || !btn.nextElementSibling) { return ''; }"
+            "const label = btn.nextElementSibling.querySelector('label');"
+            "return label ? label.textContent : '';"
+        )
+        return self.execute_script(script, button_css)
