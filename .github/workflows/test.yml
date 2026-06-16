@@ -238,7 +238,7 @@ jobs:
       # Upload artifact for deployment job
       - name: Upload GitHub Pages artifact
         if: always()
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@v5
         with:
           path: reports/allure-report
           retention-days: 90  # Increase retention period to match history
