@@ -96,15 +96,12 @@ The main job in the workflow is called `test` and performs the following steps:
     python-version: '3.12'
 - name: Install Hatch
   run: pip install hatch
-- name: Install CI dependencies
-  run: pip install -r ci/requirements.txt
 ```
 
 These steps:
 - Check out the repository code
 - Set up Python 3.12
 - Install Hatch package manager
-- Install CI dependencies from requirements.txt
 
 ### 2. Directory Preparation
 
@@ -196,7 +193,7 @@ This step:
 - name: Set up Allure
   if: always()
   run: |
-    wget -O allure-commandline.zip https://repo.maven.apache.org/maven2/io/qameta/allure/allure-commandline/2.24.0/allure-commandline-2.24.0.zip
+    wget -O allure-commandline.zip "https://repo.maven.apache.org/maven2/io/qameta/allure/allure-commandline/${ALLURE_VERSION}/allure-commandline-${ALLURE_VERSION}.zip"
     unzip allure-commandline.zip
 - name: Generate Allure Report
   if: always()
@@ -206,7 +203,7 @@ This step:
       export TZ=Europe/Berlin
       
       # Generate the report
-      ./allure-2.24.0/bin/allure generate reports/allure-results -o reports/allure-report --clean
+      "./allure-${ALLURE_VERSION}/bin/allure" generate reports/allure-results -o reports/allure-report --clean
       
       # Check if report generation was successful
       if [ $? -ne 0 ]; then
