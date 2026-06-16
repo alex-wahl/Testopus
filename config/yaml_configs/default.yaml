@@ -1,7 +1,9 @@
 configuration:
   gasag: 
     web_url: https://www.gasag.de
-    username: waal.mos@gmail.com
-    password: Test1234!
+    # Credentials come from the environment (or a local .env), never committed.
+    # Set GASAG_USERNAME / GASAG_PASSWORD (see .env.example or CI secrets).
+    username: ${GASAG_USERNAME}
+    password: ${GASAG_PASSWORD}
 
 #https://www.gasag.de/onlineservice/login

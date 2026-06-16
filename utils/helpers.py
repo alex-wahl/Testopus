@@ -1,5 +1,4 @@
 import os
-import sys
 
 
 def get_project_root() -> str:
@@ -9,6 +8,7 @@ def get_project_root() -> str:
     """
     return os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
+
 def get_config_path(override: bool = False) -> str:
     """
     Fetches the path to the config file based on the override flag.
@@ -16,6 +16,10 @@ def get_config_path(override: bool = False) -> str:
     :return: str - the path to the config file.
     """
     if override:
-        return os.path.join(get_project_root(), "config", "yaml_configs", "override.yaml")
+        return os.path.join(
+            get_project_root(), "config", "yaml_configs", "override.yaml"
+        )
     else:
-        return os.path.join(get_project_root(), "config", "yaml_configs", "default.yaml")
+        return os.path.join(
+            get_project_root(), "config", "yaml_configs", "default.yaml"
+        )

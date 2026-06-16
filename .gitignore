@@ -92,6 +92,7 @@ client_secrets.json
 *.local
 local_config.yaml
 local_settings.py
+config/yaml_configs/override.yaml
 
 ### Mobile Testing ###
 # Appium logs
@@ -109,7 +110,8 @@ appium.log
 *.p12
 
 ### Browser Drivers ###
-drivers/
+# Anchored to repo root: ignores a top-level drivers/ binaries dir, NOT the core/drivers/ package.
+/drivers/
 *.exe
 chromedriver*
 geckodriver*
