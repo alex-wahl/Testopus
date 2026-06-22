@@ -213,7 +213,7 @@ jobs:
       # Upload test history as a separate artifact to preserve between runs
       - name: Upload test history
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: allure-history
           path: reports/allure-history/
@@ -222,7 +222,7 @@ jobs:
       # Upload test reports as artifacts
       - name: Upload test reports
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: test-reports
           path: |
@@ -383,7 +383,7 @@ jobs:
 
       - name: Upload web reports
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: web-e2e-reports
           path: reports/junit/
