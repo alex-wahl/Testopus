@@ -268,7 +268,7 @@ jobs:
       # Comment on PR with Report Links
       - name: Comment PR with Report Links
         if: always() && github.event_name == 'pull_request'
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         with:
           script: |
             const artifactUrl = `${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}`;
