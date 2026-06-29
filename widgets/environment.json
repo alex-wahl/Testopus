@@ -1,0 +1,68 @@
+[
+  {
+    "name": "Branch",
+    "values": [
+      "dependabot/docker/docker/python-b877e50"
+    ]
+  },
+  {
+    "values": [
+      "Chrome"
+    ],
+    "name": "Browser"
+  },
+  {
+    "values": [
+      "latest"
+    ],
+    "name": "Browser.Version"
+  },
+  {
+    "values": [
+      "linux"
+    ],
+    "name": "OS"
+  },
+  {
+    "values": [
+      "3.14.6"
+    ],
+    "name": "Python.Version"
+  },
+  {
+    "values": [
+      "2026-06-29T23:27:01.620109"
+    ],
+    "name": "Timestamp"
+  },
+  {
+    "values": [
+      "Europe/Berlin"
+    ],
+    "name": "Timezone"
+  },
+  {
+    "values": [
+      ""
+    ],
+    "name": "Commit"
+  },
+  {
+    "values": [
+      ""
+    ],
+    "name": "RunId"
+  },
+  {
+    "values": [
+      ""
+    ],
+    "name": "RunAttempt"
+  },
+  {
+    "values": [
+      ""
+    ],
+    "name": "CiUrl"
+  }
+]

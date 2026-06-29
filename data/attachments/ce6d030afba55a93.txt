@@ -1,0 +1,1 @@
+ERROR    tools.testiny:cli.py:107 TESTINY_API_KEY not set — see .env.example

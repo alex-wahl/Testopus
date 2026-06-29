@@ -1,0 +1,3 @@
+DEBUG    tools.testiny:cli.py:113 Testiny pull config: {'base_url': 'https://app.testiny.io/api/v1', 'project_id': None, 'api_key': '***REDACTED***', 'app_field': 'cf__app', 'page_field': 'cf__page', 'out': '/tmp/pytest-of-unknown/pytest-0/test_cli_pull_writes_spec_and_0'}
+INFO     tools.testiny:cli.py:156 Wrote /tmp/pytest-of-unknown/pytest-0/test_cli_pull_writes_spec_and_0/toolshop/tc-123-login-rejects-invalid-credentials.md
+INFO     tools.testiny:cli.py:158 Done: 1 spec(s) written under /tmp/pytest-of-unknown/pytest-0/test_cli_pull_writes_spec_and_0/
